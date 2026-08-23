@@ -184,7 +184,7 @@ def auth_callback():
         <div class="card">
             <div class="icon">✨</div>
             <h1>認証に成功しました！</h1>
-            <p>ロールが正常に付与されましたので、Discordに戻って確認してください。</p>
+            <p>ロールが正常に付与されました。Discordに戻って確認してください。</p>
         </div>
     </body>
     </html>
