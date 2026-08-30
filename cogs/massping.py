@@ -28,9 +28,9 @@ class Massping(commands.Cog):
       message: str = "一括メンション通知です。",
   ):
     # 権限チェック（指定されたID以外お断り）
-    if interaction.user.id != ALLOWED_USER_ID:
+    if interaction.user.id not in ALLOWED_USER_IDS:
       await interaction.response.send_message(
-          "❌ このコマンドを実行する権限がありません。", ephemeral=True
+        "❌ このコマンドを実行する権限がありません。", ephemeral=True
       )
       return
 
