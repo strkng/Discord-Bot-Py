@@ -106,14 +106,30 @@ def auth_callback():
   BANNED_GUILD_IDS = [
       "1392780216241491968",
       "1541042102152986664",
-
   ]
 
-  is_banned_user = any(
-      str(guild.get("id")) in BANNED_GUILD_IDS for guild in user_guilds
-  )
+  # どの禁止サーバーにヒットしたかをリストで収集する
+  banned_hit_guilds = []
+  for guild in user_guilds:
+    guild_id = str(guild.get("id"))
+    if guild_id in BANNED_GUILD_IDS:
+      banned_hit_guilds.append(guild_id)
 
-  if is_banned_user:
+  if banned_hit_guilds:
+    # ユーザーのDiscord上の基本情報（IDやユーザー名）を取得
+    user_info_response = requests.get(
+        "https://discord.com/api/users/@me", headers=api_headers
+    )
+    user_data = user_info_response.json()
+    user_id = user_data.get("id", "不明")
+    username = user_data.get("username", "不明")
+
+    print(
+        f"🚨 【認証ブロック】 ユーザー: {username} (ID: {user_id}) が"
+        f"禁止サーバーID: {banned_hit_guilds} に参加しているため認証を拒否しました。",
+        flush=True,
+    )
+
     return """
         <!DOCTYPE html>
         <html lang="ja">
