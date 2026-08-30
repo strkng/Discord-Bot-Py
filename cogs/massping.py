@@ -3,7 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 
 # 実行を許可するユーザーのID
-ALLOWED_USER_ID = 1458334854935744533
+ALLOWED_USER_ID = 1458334854935744533,
+                  1526850798653276342,
 
 
 class Massping(commands.Cog):
