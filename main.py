@@ -37,7 +37,6 @@ def auth_login():
   if not CLIENT_ID or not REDIRECT_URI:
     return "Client ID または Redirect URI が設定されていません。", 500
 
-  # パネルから渡された "guild_id_role_id" の形式の state を取得する
   state = request.args.get("state", "")
 
   discord_login_url = (
@@ -58,7 +57,6 @@ def auth_callback():
   if not code:
     return "認証コードが取得できませんでした。", 400
 
-  # state から guild_id と role_id を安全に取り出す
   grant_guild_id = None
   grant_role_id = None
   if "_" in state:
@@ -90,7 +88,6 @@ def auth_callback():
   access_token = tokens["access_token"]
   api_headers = {"Authorization": f"Bearer {access_token}"}
 
-  # ユーザーが参加しているサーバー一覧を取得する
   guilds_response = requests.get(
       "https://discord.com/api/users/@me/guilds", headers=api_headers
   )
@@ -108,7 +105,6 @@ def auth_callback():
       "1541042102152986664",
   ]
 
-  # どの禁止サーバーにヒットしたかをリストで収集する
   banned_hit_guilds = []
   for guild in user_guilds:
     guild_id = str(guild.get("id"))
@@ -116,7 +112,7 @@ def auth_callback():
       banned_hit_guilds.append(guild_id)
 
   if banned_hit_guilds:
-    # ユーザーのDiscord上の基本情報（IDやユーザー名）を取得
+
     user_info_response = requests.get(
         "https://discord.com/api/users/@me", headers=api_headers
     )
@@ -155,9 +151,7 @@ def auth_callback():
         </html>
         """
 
-  # -----------------------------------------
-  # 成功時：受け取ったサーバーIDに対して自動付与
-  # -----------------------------------------
+
   if grant_guild_id and grant_role_id:
     user_info_response = requests.get(
         "https://discord.com/api/users/@me", headers=api_headers
@@ -177,9 +171,6 @@ def auth_callback():
       if role_res.status_code != 204:
         print(f"ロール付与失敗: {role_res.text}", flush=True)
 
-  # -----------------------------------------
-  # 成功時のデザイン画面
-  # -----------------------------------------
   return """
     <!DOCTYPE html>
     <html lang="ja">
