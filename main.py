@@ -37,7 +37,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 # 禁止サーバー
 #
 # このサーバーにBotがいなくても、
-# OAuth認証したユーザーが参加していれば認証拒否する。
+# OAuth認証したユーザーが参加していれば
+# 認証拒否する。
 # ========================================
 
 BANNED_GUILD_IDS = {
@@ -50,13 +51,16 @@ BANNED_GUILD_IDS = {
 # 多重起動防止・排他ロック制御
 # ========================================
 
-lock_file = open(LOCK_FILE_PATH, "w")
+lock_file = open(
+    LOCK_FILE_PATH,
+    "w",
+)
 
 try:
 
     fcntl.flock(
         lock_file,
-        fcntl.LOCK_EX | fcntl.LOCK_NB
+        fcntl.LOCK_EX | fcntl.LOCK_NB,
     )
 
     print(
@@ -108,13 +112,25 @@ def home():
 def auth_login():
 
     if not CLIENT_ID:
-        return "CLIENT_IDが設定されていません。", 500
+
+        return (
+            "CLIENT_IDが設定されていません。",
+            500,
+        )
 
     if not CLIENT_SECRET:
-        return "CLIENT_SECRETが設定されていません。", 500
+
+        return (
+            "CLIENT_SECRETが設定されていません。",
+            500,
+        )
 
     if not REDIRECT_URI:
-        return "REDIRECT_URIが設定されていません。", 500
+
+        return (
+            "REDIRECT_URIが設定されていません。",
+            500,
+        )
 
 
     # ------------------------------------
@@ -128,7 +144,7 @@ def auth_login():
 
     requested_state = request.args.get(
         "state",
-        ""
+        "",
     )
 
     grant_guild_id = None
@@ -144,10 +160,12 @@ def auth_login():
                 400,
             )
 
+
         parts = requested_state.split(
             "_",
-            1
+            1,
         )
+
 
         if len(parts) != 2:
 
@@ -156,12 +174,14 @@ def auth_login():
                 400,
             )
 
+
         if not parts[0].isdigit():
 
             return (
                 "Guild ID / Role IDが正しくありません。",
                 400,
             )
+
 
         if not parts[1].isdigit():
 
@@ -170,7 +190,9 @@ def auth_login():
                 400,
             )
 
+
         grant_guild_id = parts[0]
+
         grant_role_id = parts[1]
 
 
@@ -578,6 +600,7 @@ def auth_callback():
             )
         )
 
+
         if guild_id in BANNED_GUILD_IDS:
 
             banned_hit_guilds.append(
@@ -603,7 +626,9 @@ def auth_callback():
 
         return """
         <!DOCTYPE html>
+
         <html lang="ja">
+
         <head>
 
             <meta charset="UTF-8">
@@ -612,6 +637,7 @@ def auth_callback():
                   content="width=device-width, initial-scale=1.0">
 
             <title>認証失敗</title>
+
 
             <style>
 
@@ -699,9 +725,11 @@ def auth_callback():
                     ❌
                 </div>
 
+
                 <h1>
                     認証に失敗しました
                 </h1>
+
 
                 <p>
                     参加が禁止されている特定のサーバーに
@@ -804,8 +832,10 @@ def auth_callback():
                 flush=True,
             )
 
+
             return """
             <!DOCTYPE html>
+
             <html lang="ja">
 
             <head>
@@ -816,6 +846,7 @@ def auth_callback():
                       content="width=device-width, initial-scale=1.0">
 
                 <title>ロール付与失敗</title>
+
 
                 <style>
 
@@ -894,9 +925,11 @@ def auth_callback():
                         ⚠️
                     </div>
 
+
                     <h1>
                         ロール付与に失敗しました
                     </h1>
+
 
                     <p>
                         認証は完了しましたが、
@@ -1017,9 +1050,11 @@ def auth_callback():
                 ✨
             </div>
 
+
             <h1>
                 認証に成功しました！
             </h1>
+
 
             <p>
                 ロールが正常に付与されました。
@@ -1161,85 +1196,94 @@ class MyBot(commands.Bot):
             )
 
 
-bot = MyBot(
-
-    command_prefix="!",
-
-    intents=intents,
-
-)
-
-
 # ========================================
-# Botステータス
+# Bot生成
 # ========================================
 
-async def update_bot_status():
+def create_bot():
 
-    server_count = len(
-        bot.guilds
-    )
+    new_bot = MyBot(
 
+        command_prefix="!",
 
-    activity = discord.Activity(
-
-        type=discord.ActivityType.watching,
-
-        name=f"{server_count}個のサーバー",
+        intents=intents,
 
     )
 
 
-    await bot.change_presence(
+    # ====================================
+    # Botステータス
+    # ====================================
 
-        activity=activity
+    async def update_bot_status():
 
-    )
+        server_count = len(
+            new_bot.guilds
+        )
+
+
+        activity = discord.Activity(
+
+            type=discord.ActivityType.watching,
+
+            name=f"{server_count}個のサーバー",
+
+        )
+
+
+        await new_bot.change_presence(
+
+            activity=activity
+
+        )
+
+
+    # ====================================
+    # Bot Ready
+    # ====================================
+
+    @new_bot.event
+    async def on_ready():
+
+        print(
+
+            f"=== ログイン成功: "
+            f"{new_bot.user.name} "
+            f"(ID: {new_bot.user.id}) ===",
+
+            flush=True,
+
+        )
+
+
+        await update_bot_status()
+
+
+    # ====================================
+    # Guild参加
+    # ====================================
+
+    @new_bot.event
+    async def on_guild_join(guild):
+
+        await update_bot_status()
+
+
+    # ====================================
+    # Guild退出
+    # ====================================
+
+    @new_bot.event
+    async def on_guild_remove(guild):
+
+        await update_bot_status()
+
+
+    return new_bot
 
 
 # ========================================
-# Bot Ready
-# ========================================
-
-@bot.event
-async def on_ready():
-
-    print(
-
-        f"=== ログイン成功: "
-        f"{bot.user.name} "
-        f"(ID: {bot.user.id}) ===",
-
-        flush=True,
-
-    )
-
-
-    await update_bot_status()
-
-
-# ========================================
-# Guild参加
-# ========================================
-
-@bot.event
-async def on_guild_join(guild):
-
-    await update_bot_status()
-
-
-# ========================================
-# Guild退出
-# ========================================
-
-@bot.event
-async def on_guild_remove(guild):
-
-    await update_bot_status()
-
-
-# ========================================
-# Bot起動
+# Discord Bot起動
 # ========================================
 
 def start_discord_bot():
@@ -1290,7 +1334,19 @@ def start_discord_bot():
 
     while True:
 
+        bot = None
+
+
         try:
+
+            # --------------------------------
+            # 毎回新しいBotインスタンスを作成
+            #
+            # Session is closed対策
+            # --------------------------------
+
+            bot = create_bot()
+
 
             print(
                 "🔵 Discord Botを起動しています...",
@@ -1304,7 +1360,7 @@ def start_discord_bot():
 
 
             # --------------------------------
-            # bot.run()が正常終了した場合
+            # 正常終了
             # --------------------------------
 
             print(
@@ -1345,6 +1401,7 @@ def start_discord_bot():
                     flush=True,
                 )
 
+
                 print(
                     "⏳ "
                     f"{wait_time}秒待ってから"
@@ -1352,11 +1409,19 @@ def start_discord_bot():
                     flush=True,
                 )
 
+
                 print(
                     "🔄 "
                     f"429再試行回数: {retry_count}",
                     flush=True,
                 )
+
+
+                # --------------------------------
+                # 古いBotを破棄
+                # --------------------------------
+
+                bot = None
 
 
                 time.sleep(
@@ -1382,20 +1447,18 @@ def start_discord_bot():
 
         except discord.LoginFailure as e:
 
-            # --------------------------------
-            # トークン不正
-            # --------------------------------
-
             print(
                 "❌ Discordログイン失敗: "
                 "Botトークンが無効です。",
                 flush=True,
             )
 
+
             print(
                 f"詳細: {e}",
                 flush=True,
             )
+
 
             return
 
@@ -1407,39 +1470,37 @@ def start_discord_bot():
                 flush=True,
             )
 
+
             print(
                 f"詳細: {e}",
                 flush=True,
             )
+
 
             return
 
 
         except discord.ConnectionClosed as e:
 
-            # --------------------------------
-            # Gateway切断
-            # --------------------------------
-            #
-            # bot.run()内部の再接続で処理される
-            # ケースが多いため、ここでは
-            # プロセスを無限に高速再起動しない。
-            # --------------------------------
-
             print(
                 "⚠️ Discord Gateway接続が終了しました。",
                 flush=True,
             )
+
 
             print(
                 f"詳細: {e}",
                 flush=True,
             )
 
+
             print(
                 "⏳ 60秒待って再接続します。",
                 flush=True,
             )
+
+
+            bot = None
 
 
             time.sleep(
@@ -1450,17 +1511,63 @@ def start_discord_bot():
             continue
 
 
-        except Exception as e:
+        except RuntimeError as e:
 
             # --------------------------------
-            # その他の予期しないエラー
+            # Session is closed等
+            #
+            # 念のため古いBotを破棄して
+            # 新しいインスタンスで再試行
             # --------------------------------
+
+            error_text = str(e)
+
+
+            if "Session is closed" in error_text:
+
+                print(
+                    "⚠️ Discord内部Sessionが閉じられました。",
+                    flush=True,
+                )
+
+
+                print(
+                    "⏳ 60秒待って新しいBot "
+                    "インスタンスで再接続します。",
+                    flush=True,
+                )
+
+
+                bot = None
+
+
+                time.sleep(
+                    60
+                )
+
+
+                continue
+
 
             print(
-                "❌ Bot起動中に予期しないエラーが発生しました: "
+                "❌ RuntimeError: "
+                f"{e}",
+                flush=True,
+            )
+
+
+            return
+
+
+        except Exception as e:
+
+            print(
+                "❌ Bot起動中に予期しないエラーが"
+                "発生しました: "
                 f"{type(e).__name__}: {e}",
                 flush=True,
             )
+
 
             return
 
