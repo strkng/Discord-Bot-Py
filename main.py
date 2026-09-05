@@ -1,6 +1,7 @@
 import fcntl
 import logging
 import os
+import secrets
 import threading
 import urllib.parse
 
@@ -10,26 +11,70 @@ from discord.ext import commands
 from flask import Flask, redirect, request, session
 import requests
 
+
+# ========================================
+# 設定
+# ========================================
+
+API_BASE = "https://discord.com/api/v10"
+
+LOCK_FILE_PATH = "bot_instance.lock"
+
+CLIENT_ID = os.environ.get("CLIENT_ID")
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+
+REDIRECT_URI = os.environ.get(
+    "REDIRECT_URI",
+    "https://discord-bot-py-4mzn.onrender.com/auth/callback",
+)
+
+DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# ========================================
+# 禁止サーバー
+#
+# このサーバーにBotがいなくても、
+# OAuth認証したユーザーが参加していれば認証拒否する。
+# ========================================
+
+BANNED_GUILD_IDS = {
+    "1392780216241491968",
+    "1541042102152986664",
+}
+
+
 # ========================================
 # 多重起動防止・排他ロック制御
 # ========================================
-LOCK_FILE_PATH = "bot_instance.lock"
+
 lock_file = open(LOCK_FILE_PATH, "w")
 
 try:
-  fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-  print(
-      "🔒 【排他制御】ロック取得成功: このプロセスをメインインスタンスとして起動します。",
-      flush=True,
-  )
-  IS_PRIMARY_INSTANCE = True
+    fcntl.flock(
+        lock_file,
+        fcntl.LOCK_EX | fcntl.LOCK_NB
+    )
+
+    print(
+        "🔒 【排他制御】ロック取得成功: "
+        "このプロセスをメインインスタンスとして起動します。",
+        flush=True,
+    )
+
+    IS_PRIMARY_INSTANCE = True
+
 except (IOError, BlockingIOError):
-  print(
-      "🚨 【多重起動検知】すでに別のプロセスでボットが稼働中または起動を試行しています！"
-      "429エラー（レート制限）を防ぐため、このインスタンスでのDiscord Botの多重起動をスキップします。",
-      flush=True,
-  )
-  IS_PRIMARY_INSTANCE = False
+
+    print(
+        "🚨 【多重起動検知】"
+        "すでに別のプロセスでボットが稼働中です。"
+        "このインスタンスではDiscord Botを起動しません。",
+        flush=True,
+    )
+
+    IS_PRIMARY_INSTANCE = False
+
 
 # ========================================
 # Flask
@@ -39,180 +84,633 @@ log = logging.getLogger("werkzeug")
 log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
-CLIENT_ID = os.environ.get("CLIENT_ID")
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
-REDIRECT_URI = os.environ.get(
-    "REDIRECT_URI",
-    "https://discord-bot-py-4mzn.onrender.com/auth/callback",
+# Flaskのセッションを使用するため、
+# Renderの環境変数にFLASK_SECRET_KEYを設定することを推奨。
+app.secret_key = os.environ.get(
+    "FLASK_SECRET_KEY",
+    os.urandom(32),
 )
 
 
 @app.route("/")
 def home():
-  return "Bot is running!"
+    return "Bot is running!"
 
+
+# ========================================
+# OAuth2 ログイン開始
+# ========================================
 
 @app.route("/auth/login")
 def auth_login():
-  if not CLIENT_ID or not REDIRECT_URI:
-    return "Client ID または Redirect URI が設定されていません。", 500
 
-  state = request.args.get("state", "")
+    if not CLIENT_ID:
+        return "CLIENT_IDが設定されていません。", 500
 
-  discord_login_url = (
-      f"https://discord.com/oauth2/authorize?client_id={CLIENT_ID}"
-      f"&response_type=code"
-      f"&redirect_uri={urllib.parse.quote(REDIRECT_URI)}"
-      f"&scope=guilds+identify"
-      f"&state={state}"
-  )
-  return redirect(discord_login_url)
+    if not CLIENT_SECRET:
+        return "CLIENT_SECRETが設定されていません。", 500
 
+    if not REDIRECT_URI:
+        return "REDIRECT_URIが設定されていません。", 500
+
+    # ------------------------------------
+    # 元のURLからGuild ID / Role IDを取得
+    #
+    # 既存仕様:
+    # /auth/login?state=GUILD_ID_ROLE_ID
+    #
+    # ここでは互換性維持のため受け取る。
+    # 実際のOAuth stateには直接入れず、
+    # サーバー側のFlask sessionに保存する。
+    # ------------------------------------
+
+    requested_state = request.args.get("state", "")
+
+    grant_guild_id = None
+    grant_role_id = None
+
+    if requested_state:
+
+        if "_" not in requested_state:
+            return "認証情報の形式が正しくありません。", 400
+
+        parts = requested_state.split("_", 1)
+
+        if len(parts) != 2:
+            return "認証情報の形式が正しくありません。", 400
+
+        if not parts[0].isdigit() or not parts[1].isdigit():
+            return "Guild ID / Role IDが正しくありません。", 400
+
+        grant_guild_id = parts[0]
+        grant_role_id = parts[1]
+
+    # ------------------------------------
+    # OAuth用の安全なstateを生成
+    # ------------------------------------
+
+    oauth_state = secrets.token_urlsafe(32)
+
+    # OAuth開始時の情報をFlask sessionに保存
+    session["oauth_state"] = oauth_state
+    session["grant_guild_id"] = grant_guild_id
+    session["grant_role_id"] = grant_role_id
+
+    # ------------------------------------
+    # Discord OAuth2 URL
+    # ------------------------------------
+
+    params = {
+        "client_id": CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": REDIRECT_URI,
+        "scope": "identify guilds",
+        "state": oauth_state,
+    }
+
+    discord_login_url = (
+        "https://discord.com/oauth2/authorize?"
+        + urllib.parse.urlencode(params)
+    )
+
+    return redirect(discord_login_url)
+
+
+# ========================================
+# OAuth2 Callback
+# ========================================
 
 @app.route("/auth/callback")
 def auth_callback():
-  code = request.args.get("code")
-  state = request.args.get("state", "")  # "guild_id:role_id" の形式で受け取る
 
-  if not code:
-    return "認証コードが取得できませんでした。", 400
+    code = request.args.get("code")
+    returned_state = request.args.get("state")
 
-  grant_guild_id = None
-  grant_role_id = None
-  if "_" in state:
-    parts = state.split("_", 1)
-    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-      grant_guild_id = parts[0]
-      grant_role_id = parts[1]
+    # ------------------------------------
+    # OAuthエラー確認
+    # ------------------------------------
 
-  data = {
-      "client_id": CLIENT_ID,
-      "client_secret": CLIENT_SECRET,
-      "grant_type": "authorization_code",
-      "code": code,
-      "redirect_uri": REDIRECT_URI,
-  }
-  headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    oauth_error = request.args.get("error")
 
-  response = requests.post(
-      "https://discord.com/api/oauth2/token", data=data, headers=headers
-  )
-  tokens = response.json()
+    if oauth_error:
+        return (
+            f"Discord認証がキャンセルまたは失敗しました: "
+            f"{oauth_error}",
+            400,
+        )
 
-  if "access_token" not in tokens:
-    return (
-        f"アクセストークンの取得に失敗しました: {tokens.get('error_description', tokens)}",
-        400,
+    if not code:
+        return "認証コードが取得できませんでした。", 400
+
+    if not returned_state:
+        return "OAuth stateがありません。", 400
+
+    # ------------------------------------
+    # state検証
+    # ------------------------------------
+
+    saved_state = session.pop("oauth_state", None)
+
+    if not saved_state:
+        return (
+            "認証セッションが見つかりません。"
+            "最初から認証をやり直してください。",
+            400,
+        )
+
+    if not secrets.compare_digest(
+        returned_state,
+        saved_state,
+    ):
+        return "不正なOAuth stateです。", 400
+
+    # ------------------------------------
+    # セッションからロール付与先を取得
+    # ------------------------------------
+
+    grant_guild_id = session.pop(
+        "grant_guild_id",
+        None,
     )
 
-  access_token = tokens["access_token"]
-  api_headers = {"Authorization": f"Bearer {access_token}"}
-
-  guilds_response = requests.get(
-      "https://discord.com/api/users/@me/guilds", headers=api_headers
-  )
-  user_guilds = guilds_response.json()
-
-  if isinstance(user_guilds, dict) and "error" in user_guilds:
-    return (
-        f"サーバー情報の取得に失敗しました: {user_guilds.get('message')}",
-        400,
+    grant_role_id = session.pop(
+        "grant_role_id",
+        None,
     )
 
-  # 禁止サーバー
-  BANNED_GUILD_IDS = [
-      "1392780216241491968",
-      "1541042102152986664",
-  ]
+    # ====================================
+    # Authorization Code → Access Token
+    # ====================================
 
-  banned_hit_guilds = []
-  for guild in user_guilds:
-    guild_id = str(guild.get("id"))
-    if guild_id in BANNED_GUILD_IDS:
-      banned_hit_guilds.append(guild_id)
+    token_data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": REDIRECT_URI,
+    }
 
-  if banned_hit_guilds:
-    user_info_response = requests.get(
-        "https://discord.com/api/users/@me", headers=api_headers
-    )
-    user_data = user_info_response.json()
-    user_id = user_data.get("id", "不明")
+    token_headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+
+    try:
+        response = requests.post(
+            f"{API_BASE}/oauth2/token",
+            data=token_data,
+            headers=token_headers,
+            timeout=10,
+        )
+
+    except requests.RequestException as e:
+
+        print(
+            f"❌ Discord OAuth2 Token API通信失敗: {e}",
+            flush=True,
+        )
+
+        return "Discordとの通信に失敗しました。", 502
+
+    try:
+        tokens = response.json()
+
+    except ValueError:
+
+        print(
+            f"❌ Discord Token APIから不正なJSON: "
+            f"{response.text}",
+            flush=True,
+        )
+
+        return "Discordから不正な応答が返されました。", 502
+
+    if "access_token" not in tokens:
+
+        return (
+            "アクセストークンの取得に失敗しました: "
+            f"{tokens.get('error_description', tokens)}",
+            400,
+        )
+
+    access_token = tokens["access_token"]
+
+    api_headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+
+    # ====================================
+    # ユーザー情報取得
+    # ====================================
+
+    try:
+        user_info_response = requests.get(
+            f"{API_BASE}/users/@me",
+            headers=api_headers,
+            timeout=10,
+        )
+
+    except requests.RequestException as e:
+
+        print(
+            f"❌ ユーザー情報取得失敗: {e}",
+            flush=True,
+        )
+
+        return "Discordとの通信に失敗しました。", 502
+
+    if user_info_response.status_code != 200:
+
+        print(
+            f"❌ ユーザー情報取得APIエラー: "
+            f"{user_info_response.text}",
+            flush=True,
+        )
+
+        return "Discordユーザー情報の取得に失敗しました。", 400
+
+    try:
+        user_data = user_info_response.json()
+
+    except ValueError:
+        return "Discordユーザー情報が不正です。", 400
+
+    user_id = user_data.get("id")
     username = user_data.get("username", "不明")
 
-    print(
-        f"🚨 【認証ブロック】 ユーザー: {username} (ID: {user_id}) が"
-        f"禁止サーバーID: {banned_hit_guilds} に参加しているため認証を拒否しました。",
-        flush=True,
-    )
+    if not user_id:
+        return "DiscordユーザーIDを取得できませんでした。", 400
 
-    return """
+    # ====================================
+    # ユーザー参加Guild取得
+    #
+    # ここが禁止サーバー判定の本体。
+    #
+    # 禁止サーバーにBotがいなくてもOK。
+    # ====================================
+
+    try:
+        guilds_response = requests.get(
+            f"{API_BASE}/users/@me/guilds",
+            headers=api_headers,
+            timeout=10,
+        )
+
+    except requests.RequestException as e:
+
+        print(
+            f"❌ Guild一覧取得失敗: {e}",
+            flush=True,
+        )
+
+        return "Discordとの通信に失敗しました。", 502
+
+    if guilds_response.status_code != 200:
+
+        print(
+            f"❌ Guild一覧APIエラー: "
+            f"{guilds_response.text}",
+            flush=True,
+        )
+
+        return "参加サーバー情報の取得に失敗しました。", 400
+
+    try:
+        user_guilds = guilds_response.json()
+
+    except ValueError:
+        return "Discordのサーバー情報が不正です。", 400
+
+    if not isinstance(user_guilds, list):
+
+        print(
+            f"❌ Guild一覧が配列ではありません: "
+            f"{user_guilds}",
+            flush=True,
+        )
+
+        return "サーバー情報の取得に失敗しました。", 400
+
+    # ====================================
+    # 禁止サーバー判定
+    # ====================================
+
+    banned_hit_guilds = []
+
+    for guild in user_guilds:
+
+        guild_id = str(
+            guild.get("id", "")
+        )
+
+        if guild_id in BANNED_GUILD_IDS:
+
+            banned_hit_guilds.append(guild_id)
+
+    # ====================================
+    # 禁止サーバーに参加している場合
+    # ====================================
+
+    if banned_hit_guilds:
+
+        print(
+            f"🚨 【認証ブロック】 "
+            f"ユーザー: {username} "
+            f"(ID: {user_id}) が "
+            f"禁止サーバーID: {banned_hit_guilds} "
+            f"に参加しているため認証を拒否しました。",
+            flush=True,
+        )
+
+        return """
         <!DOCTYPE html>
         <html lang="ja">
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="viewport"
+                  content="width=device-width, initial-scale=1.0">
             <title>認証失敗</title>
+
             <style>
-                body { background-color: #1e1e2e; color: #cdd6f4; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-                .card { background-color: #313244; padding: 2.5rem; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); text-align: center; max-width: 400px; width: 90%; }
-                .icon { font-size: 3rem; margin-bottom: 1rem; }
-                h1 { color: #f38ba8; font-size: 1.5rem; margin-bottom: 1rem; }
-                p { color: #a6adc8; font-size: 0.95rem; line-height: 1.6; }
+                body {
+                    background-color: #1e1e2e;
+                    color: #cdd6f4;
+                    font-family: sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                }
+
+                .card {
+                    background-color: #313244;
+                    padding: 2.5rem;
+                    border-radius: 16px;
+                    box-shadow:
+                        0 8px 24px rgba(0,0,0,0.3);
+                    text-align: center;
+                    max-width: 400px;
+                    width: 90%;
+                }
+
+                .icon {
+                    font-size: 3rem;
+                    margin-bottom: 1rem;
+                }
+
+                h1 {
+                    color: #f38ba8;
+                    font-size: 1.5rem;
+                    margin-bottom: 1rem;
+                }
+
+                p {
+                    color: #a6adc8;
+                    font-size: 0.95rem;
+                    line-height: 1.6;
+                }
             </style>
         </head>
+
         <body>
+
             <div class="card">
+
                 <div class="icon">❌</div>
+
                 <h1>認証に失敗しました</h1>
-                <p>参加が禁止されている特定のサーバーに加入しているため、ロールを付与できません。</p>
+
+                <p>
+                    参加が禁止されている特定のサーバーに
+                    加入しているため、ロールを付与できません。
+                </p>
+
             </div>
+
         </body>
         </html>
         """
 
-  if grant_guild_id and grant_role_id:
-    user_info_response = requests.get(
-        "https://discord.com/api/users/@me", headers=api_headers
-    )
-    user_data = user_info_response.json()
-    user_id = user_data.get("id")
+    # ====================================
+    # 禁止サーバーなし
+    # → ロール付与
+    # ====================================
 
-    if user_id:
-      bot_token = os.environ.get("DISCORD_TOKEN")
-      role_headers = {
-          "Authorization": f"Bot {bot_token}",
-          "Content-Type": "application/json",
-      }
+    if grant_guild_id and grant_role_id:
 
-      role_url = f"https://discord.com/api/v10/guilds/{grant_guild_id}/members/{user_id}/roles/{grant_role_id}"
-      role_res = requests.put(role_url, headers=role_headers)
-      if role_res.status_code != 204:
-        print(f"ロール付与失敗: {role_res.text}", flush=True)
+        if not DISCORD_TOKEN:
 
-  return """
+            print(
+                "❌ DISCORD_TOKENが設定されていません。",
+                flush=True,
+            )
+
+            return (
+                "Botの設定に問題があるため、"
+                "ロールを付与できません。",
+                500,
+            )
+
+        role_headers = {
+            "Authorization": f"Bot {DISCORD_TOKEN}",
+            "Content-Type": "application/json",
+        }
+
+        role_url = (
+            f"{API_BASE}/guilds/"
+            f"{grant_guild_id}/members/"
+            f"{user_id}/roles/"
+            f"{grant_role_id}"
+        )
+
+        try:
+
+            role_res = requests.put(
+                role_url,
+                headers=role_headers,
+                timeout=10,
+            )
+
+        except requests.RequestException as e:
+
+            print(
+                f"❌ ロール付与API通信失敗: {e}",
+                flush=True,
+            )
+
+            return (
+                "Discordとの通信に失敗したため、"
+                "ロールを付与できませんでした。",
+                502,
+            )
+
+        if role_res.status_code == 204:
+
+            print(
+                f"✅ ロール付与成功: "
+                f"user={user_id}, "
+                f"guild={grant_guild_id}, "
+                f"role={grant_role_id}",
+                flush=True,
+            )
+
+        else:
+
+            print(
+                f"❌ ロール付与失敗: "
+                f"HTTP {role_res.status_code} "
+                f"{role_res.text}",
+                flush=True,
+            )
+
+            return """
+            <!DOCTYPE html>
+            <html lang="ja">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport"
+                      content="width=device-width, initial-scale=1.0">
+                <title>ロール付与失敗</title>
+
+                <style>
+                    body {
+                        background-color: #1e1e2e;
+                        color: #cdd6f4;
+                        font-family: sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                    }
+
+                    .card {
+                        background-color: #313244;
+                        padding: 2.5rem;
+                        border-radius: 16px;
+                        text-align: center;
+                        max-width: 400px;
+                        width: 90%;
+                    }
+
+                    h1 {
+                        color: #fab387;
+                    }
+
+                    p {
+                        color: #a6adc8;
+                        line-height: 1.6;
+                    }
+                </style>
+            </head>
+
+            <body>
+
+                <div class="card">
+
+                    <div class="icon">⚠️</div>
+
+                    <h1>ロール付与に失敗しました</h1>
+
+                    <p>
+                        認証は完了しましたが、
+                        ロールを付与できませんでした。
+                        Botの権限やロール階層を確認してください。
+                    </p>
+
+                </div>
+
+            </body>
+            </html>
+            """
+
+    # ====================================
+    # 認証成功
+    # ====================================
+
+    return """
     <!DOCTYPE html>
     <html lang="ja">
+
     <head>
+
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <meta name="viewport"
+              content="width=device-width, initial-scale=1.0">
+
         <title>認証完了</title>
+
         <style>
-            body { background-color: #1e1e2e; color: #cdd6f4; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .card { background-color: #313244; padding: 2.5rem; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); text-align: center; max-width: 400px; width: 90%; }
-            .icon { font-size: 3rem; margin-bottom: 1rem; }
-            h1 { color: #a6e3a1; font-size: 1.5rem; margin-bottom: 1rem; }
-            p { color: #a6adc8; font-size: 0.95rem; line-height: 1.6; }
+
+            body {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+                font-family: sans-serif;
+
+                display: flex;
+                justify-content: center;
+                align-items: center;
+
+                height: 100vh;
+                margin: 0;
+            }
+
+            .card {
+                background-color: #313244;
+
+                padding: 2.5rem;
+
+                border-radius: 16px;
+
+                box-shadow:
+                    0 8px 24px rgba(0,0,0,0.3);
+
+                text-align: center;
+
+                max-width: 400px;
+                width: 90%;
+            }
+
+            .icon {
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }
+
+            h1 {
+                color: #a6e3a1;
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+            }
+
+            p {
+                color: #a6adc8;
+                font-size: 0.95rem;
+                line-height: 1.6;
+            }
+
         </style>
+
     </head>
+
     <body>
+
         <div class="card">
+
             <div class="icon">✨</div>
+
             <h1>認証に成功しました！</h1>
-            <p>ロールが正常に付与されました。Discordに戻って確認してください。</p>
+
+            <p>
+                ロールが正常に付与されました。
+                Discordに戻って確認してください。
+            </p>
+
         </div>
+
     </body>
+
     </html>
     """
 
@@ -222,82 +720,218 @@ def auth_callback():
 # ========================================
 
 intents = discord.Intents.default()
+
 intents.message_content = True
 intents.voice_states = True
 intents.members = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
 
+class MyBot(commands.Bot):
+
+    async def setup_hook(self):
+
+        # --------------------------------
+        # PostgreSQL
+        # --------------------------------
+
+        if DATABASE_URL:
+
+            try:
+
+                self.pool = await asyncpg.create_pool(
+                    DATABASE_URL,
+                    min_size=1,
+                    max_size=5,
+                    statement_cache_size=0,
+                )
+
+                print(
+                    "✅ PostgreSQLへの接続に成功しました！",
+                    flush=True,
+                )
+
+            except Exception as e:
+
+                print(
+                    f"❌ PostgreSQL接続失敗: {e}",
+                    flush=True,
+                )
+
+        # --------------------------------
+        # Cog読み込み
+        # --------------------------------
+
+        if os.path.exists("./cogs"):
+
+            for filename in os.listdir("./cogs"):
+
+                if not filename.endswith(".py"):
+                    continue
+
+                if filename.startswith("_"):
+                    continue
+
+                cog_name = f"cogs.{filename[:-3]}"
+
+                if cog_name in self.extensions:
+                    continue
+
+                try:
+
+                    await self.load_extension(cog_name)
+
+                    print(
+                        f"✅ Cog読み込み成功: "
+                        f"{cog_name}",
+                        flush=True,
+                    )
+
+                except Exception as e:
+
+                    print(
+                        f"❌ Cog読み込み失敗: "
+                        f"{cog_name}: {e}",
+                        flush=True,
+                    )
+
+        # --------------------------------
+        # Slash Commands同期
+        # --------------------------------
+
+        try:
+
+            synced = await self.tree.sync()
+
+            print(
+                f"🌟 スラッシュコマンド同期成功 "
+                f"({len(synced)}個)",
+                flush=True,
+            )
+
+        except Exception as e:
+
+            print(
+                f"❌ スラッシュコマンド同期失敗: {e}",
+                flush=True,
+            )
+
+
+bot = MyBot(
+    command_prefix="!",
+    intents=intents,
+)
+
+
+# ========================================
+# Botステータス
+# ========================================
 
 async def update_bot_status():
-  server_count = len(bot.guilds)
-  activity = discord.Activity(
-      type=discord.ActivityType.watching,
-      name=f"{server_count}個のサーバー",
-  )
-  await bot.change_presence(activity=activity)
 
+    server_count = len(bot.guilds)
+
+    activity = discord.Activity(
+        type=discord.ActivityType.watching,
+        name=f"{server_count}個のサーバー",
+    )
+
+    await bot.change_presence(
+        activity=activity
+    )
+
+
+# ========================================
+# Bot Ready
+# ========================================
 
 @bot.event
 async def on_ready():
-  print(f"=== ログイン成功: {bot.user.name} (ID: {bot.user.id}) ===", flush=True)
 
-  await update_bot_status()
+    print(
+        f"=== ログイン成功: "
+        f"{bot.user.name} "
+        f"(ID: {bot.user.id}) ===",
+        flush=True,
+    )
 
-  if not hasattr(bot, "pool"):
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-      try:
-        bot.pool = await asyncpg.create_pool(
-            database_url, min_size=1, max_size=5, statement_cache_size=0
-        )
-        print("✅ PostgreSQLへの接続に成功しました！", flush=True)
-      except Exception as e:
-        print(f"❌ PostgreSQL接続失敗: {e}", flush=True)
+    await update_bot_status()
 
-  if os.path.exists("./cogs"):
-    for filename in os.listdir("./cogs"):
-      if not filename.endswith(".py") or filename.startswith("_"):
-        continue
-      cog_name = f"cogs.{filename[:-3]}"
-      if cog_name not in bot.extensions:
-        try:
-          await bot.load_extension(cog_name)
-          print(f"✅ Cog読み込み成功: {cog_name}", flush=True)
-        except Exception as e:
-          print(f"❌ Cog読み込み失敗: {cog_name}: {e}", flush=True)
 
-  try:
-    synced = await bot.tree.sync()
-    print(f"🌟 スラッシュコマンド同期成功 ({len(synced)}個)", flush=True)
-  except Exception as e:
-    print(f"❌ スラッシュコマンド同期失敗: {e}", flush=True)
-
+# ========================================
+# Guild参加
+# ========================================
 
 @bot.event
 async def on_guild_join(guild):
-  await update_bot_status()
 
+    await update_bot_status()
+
+
+# ========================================
+# Guild退出
+# ========================================
 
 @bot.event
 async def on_guild_remove(guild):
-  await update_bot_status()
 
+    await update_bot_status()
+
+
+# ========================================
+# Bot起動
+# ========================================
 
 def start_discord_bot():
-  token = os.environ.get("DISCORD_TOKEN")
-  if token:
+
+    if not DISCORD_TOKEN:
+
+        print(
+            "❌ DISCORD_TOKENが設定されていません。"
+            "Discord Botを起動できません。",
+            flush=True,
+        )
+
+        return
+
     try:
-      bot.run(token)
+
+        bot.run(DISCORD_TOKEN)
+
     except Exception as e:
-      print(f"❌ Bot起動エラー: {e}", flush=True)
+
+        print(
+            f"❌ Bot起動エラー: {e}",
+            flush=True,
+        )
 
 
-# メインインスタンスの場合のみDiscord Botのスレッドを起動する
+# ========================================
+# メインインスタンスの場合のみ
+# Discord Bot起動
+# ========================================
+
 if IS_PRIMARY_INSTANCE:
-  threading.Thread(target=start_discord_bot, daemon=True).start()
 
-# Flaskサーバーの直接起動
+    threading.Thread(
+        target=start_discord_bot,
+        daemon=True,
+    ).start()
+
+
+# ========================================
+# Flaskサーバー起動
+# ========================================
+
 if __name__ == "__main__":
-  port = int(os.environ.get("PORT", 10000))
-  app.run(host="0.0.0.0", port=port)
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            10000,
+        )
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+    )
