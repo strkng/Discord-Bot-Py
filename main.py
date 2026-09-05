@@ -1,3 +1,4 @@
+import fcntl
 import logging
 import os
 import threading
@@ -8,6 +9,27 @@ import discord
 from discord.ext import commands
 from flask import Flask, redirect, request, session
 import requests
+
+# ========================================
+# 多重起動防止・排他ロック制御
+# ========================================
+LOCK_FILE_PATH = "bot_instance.lock"
+lock_file = open(LOCK_FILE_PATH, "w")
+
+try:
+  fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+  print(
+      "🔒 【排他制御】ロック取得成功: このプロセスをメインインスタンスとして起動します。",
+      flush=True,
+  )
+  IS_PRIMARY_INSTANCE = True
+except (IOError, BlockingIOError):
+  print(
+      "🚨 【多重起動検知】すでに別のプロセス（またはワーカー）でボットが稼働中または起動を試行しています！"
+      "429エラー（レート制限）を防ぐため、このインスタンスでのDiscord Botの多重起動をスキップします。",
+      flush=True,
+  )
+  IS_PRIMARY_INSTANCE = False
 
 # ========================================
 # Flask
@@ -112,7 +134,6 @@ def auth_callback():
       banned_hit_guilds.append(guild_id)
 
   if banned_hit_guilds:
-
     user_info_response = requests.get(
         "https://discord.com/api/users/@me", headers=api_headers
     )
@@ -150,7 +171,6 @@ def auth_callback():
         </body>
         </html>
         """
-
 
   if grant_guild_id and grant_role_id:
     user_info_response = requests.get(
@@ -278,4 +298,6 @@ def start_discord_bot():
       print(f"❌ Bot起動エラー: {e}", flush=True)
 
 
-threading.Thread(target=start_discord_bot, daemon=True).start()
+# メインインスタンスの場合のみDiscord Botのスレッドを起動する
+if IS_PRIMARY_INSTANCE:
+  threading.Thread(target=start_discord_bot, daemon=True).start()
