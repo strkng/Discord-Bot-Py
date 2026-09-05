@@ -25,7 +25,7 @@ try:
   IS_PRIMARY_INSTANCE = True
 except (IOError, BlockingIOError):
   print(
-      "🚨 【多重起動検知】すでに別のプロセス（またはワーカー）でボットが稼働中または起動を試行しています！"
+      "🚨 【多重起動検知】すでに別のプロセスでボットが稼働中または起動を試行しています！"
       "429エラー（レート制限）を防ぐため、このインスタンスでのDiscord Botの多重起動をスキップします。",
       flush=True,
   )
@@ -217,11 +217,6 @@ def auth_callback():
     """
 
 
-def run_flask():
-  port = int(os.environ.get("PORT", 10000))
-  app.run(host="0.0.0.0", port=port)
-
-
 # ========================================
 # Discord Bot
 # ========================================
@@ -301,3 +296,8 @@ def start_discord_bot():
 # メインインスタンスの場合のみDiscord Botのスレッドを起動する
 if IS_PRIMARY_INSTANCE:
   threading.Thread(target=start_discord_bot, daemon=True).start()
+
+# Flaskサーバーの直接起動
+if __name__ == "__main__":
+  port = int(os.environ.get("PORT", 10000))
+  app.run(host="0.0.0.0", port=port)
