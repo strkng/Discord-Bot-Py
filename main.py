@@ -73,16 +73,27 @@ try:
 
     IS_PRIMARY_INSTANCE = True
 
-    print("🔒 【排他制御】ロック取得成功。Botを起動します。")
+    print(
+        "🔒 【排他制御】ロック取得成功。Botを起動します。",
+        flush=True
+    )
 
 except BlockingIOError:
 
-    print("⚠️ 【排他制御】別のBotプロセスが起動中です。")
+    print(
+        "⚠️ 【排他制御】別のBotプロセスが起動中です。",
+        flush=True
+    )
+
     IS_PRIMARY_INSTANCE = False
 
 except Exception as e:
 
-    print(f"⚠️ 【排他制御】ロック処理でエラー: {e}")
+    print(
+        f"⚠️ 【排他制御】ロック処理でエラー: {e}",
+        flush=True
+    )
+
     IS_PRIMARY_INSTANCE = False
 
 
@@ -253,7 +264,10 @@ def auth_callback():
 
     except Exception as e:
 
-        print(f"❌ OAuth token request error: {e}")
+        print(
+            f"❌ OAuth token request error: {e}",
+            flush=True
+        )
 
         return """
         <h1>❌ 認証失敗</h1>
@@ -265,7 +279,8 @@ def auth_callback():
         print(
             "❌ OAuth token取得失敗:",
             token_response.status_code,
-            token_response.text
+            token_response.text,
+            flush=True
         )
 
         return """
@@ -311,7 +326,10 @@ def auth_callback():
 
     except Exception as e:
 
-        print(f"❌ User API request error: {e}")
+        print(
+            f"❌ User API request error: {e}",
+            flush=True
+        )
 
         return """
         <h1>❌ 認証失敗</h1>
@@ -323,7 +341,8 @@ def auth_callback():
         print(
             "❌ ユーザー情報取得失敗:",
             user_response.status_code,
-            user_response.text
+            user_response.text,
+            flush=True
         )
 
         return """
@@ -365,7 +384,10 @@ def auth_callback():
 
     except Exception as e:
 
-        print(f"❌ Guild API request error: {e}")
+        print(
+            f"❌ Guild API request error: {e}",
+            flush=True
+        )
 
         return """
         <h1>❌ 認証失敗</h1>
@@ -377,7 +399,8 @@ def auth_callback():
         print(
             "❌ Guild一覧取得失敗:",
             guild_response.status_code,
-            guild_response.text
+            guild_response.text,
+            flush=True
         )
 
         return """
@@ -417,7 +440,8 @@ def auth_callback():
         print(
             f"🚫 OAuth拒否: "
             f"user={user_id}, "
-            f"banned_guild={banned_guild}"
+            f"banned_guild={banned_guild}",
+            flush=True
         )
 
         return """
@@ -440,7 +464,10 @@ def auth_callback():
 
     if not DISCORD_TOKEN:
 
-        print("❌ DISCORD_TOKENが設定されていません。")
+        print(
+            "❌ DISCORD_TOKENが設定されていません。",
+            flush=True
+        )
 
         return """
         <h1>❌ エラー</h1>
@@ -470,7 +497,10 @@ def auth_callback():
 
     except Exception as e:
 
-        print(f"❌ Role付与リクエストエラー: {e}")
+        print(
+            f"❌ Role付与リクエストエラー: {e}",
+            flush=True
+        )
 
         return """
         <h1>❌ 認証失敗</h1>
@@ -487,7 +517,8 @@ def auth_callback():
             f"✅ Role付与成功: "
             f"user={user_id}, "
             f"guild={guild_id}, "
-            f"role={role_id}"
+            f"role={role_id}",
+            flush=True
         )
 
         return """
@@ -511,7 +542,8 @@ def auth_callback():
     print(
         f"❌ Role付与失敗: "
         f"status={role_response.status_code}, "
-        f"text={role_response.text}"
+        f"text={role_response.text}",
+        flush=True
     )
 
     return f"""
@@ -555,7 +587,11 @@ def print_429_details(error):
         f"Exception: {error}"
     )
 
-    response = getattr(error, "response", None)
+    response = getattr(
+        error,
+        "response",
+        None
+    )
 
     if response is not None:
 
@@ -604,7 +640,9 @@ def print_429_details(error):
                     "x-ratelimit-reset-after",
                 }:
 
-                    print(f"{key}: {value}")
+                    print(
+                        f"{key}: {value}"
+                    )
 
     # --------------------------------------------------------
     # Discordエラーテキスト
@@ -618,17 +656,29 @@ def print_429_details(error):
 
     if error_text:
 
-        print("----- Discord Error Text -----")
-        print(error_text)
+        print(
+            "----- Discord Error Text -----"
+        )
+
+        print(
+            error_text
+        )
 
         try:
 
             import json
 
-            parsed = json.loads(error_text)
+            parsed = json.loads(
+                error_text
+            )
 
-            print("----- Parsed JSON -----")
-            print(parsed)
+            print(
+                "----- Parsed JSON -----"
+            )
+
+            print(
+                parsed
+            )
 
         except Exception:
 
@@ -699,7 +749,9 @@ def get_retry_after(error):
 
                     try:
 
-                        retry_after = float(value)
+                        retry_after = float(
+                            value
+                        )
 
                         if retry_after >= 0:
 
@@ -780,15 +832,30 @@ def format_wait_time(seconds):
 
 def create_bot():
 
+    print(
+        "🟣 create_bot()開始",
+        flush=True
+    )
+
     intents = discord.Intents.default()
 
     intents.message_content = True
     intents.voice_states = True
     intents.members = True
 
+    print(
+        "🟣 Discord Intents設定完了",
+        flush=True
+    )
+
     class MyBot(commands.Bot):
 
         def __init__(self):
+
+            print(
+                "🟣 MyBot.__init__()開始",
+                flush=True
+            )
 
             super().__init__(
                 command_prefix="!",
@@ -797,13 +864,21 @@ def create_bot():
 
             self.db_pool = None
 
+            print(
+                "🟣 MyBot.__init__()完了",
+                flush=True
+            )
+
         # ====================================================
         # setup_hook
         # ====================================================
 
         async def setup_hook(self):
 
-            print("🔧 Bot setup_hook開始")
+            print(
+                "🔧 Bot setup_hook開始",
+                flush=True
+            )
 
             # ------------------------------------------------
             # PostgreSQL / Supabase
@@ -814,7 +889,8 @@ def create_bot():
                 try:
 
                     print(
-                        "🗄️ PostgreSQLへ接続しています..."
+                        "🗄️ PostgreSQLへ接続しています...",
+                        flush=True
                     )
 
                     self.db_pool = (
@@ -827,13 +903,15 @@ def create_bot():
                     )
 
                     print(
-                        "✅ PostgreSQL接続成功"
+                        "✅ PostgreSQL接続成功",
+                        flush=True
                     )
 
                 except Exception as e:
 
                     print(
-                        f"❌ PostgreSQL接続エラー: {e}"
+                        f"❌ PostgreSQL接続エラー: {e}",
+                        flush=True
                     )
 
                     self.db_pool = None
@@ -841,7 +919,8 @@ def create_bot():
             else:
 
                 print(
-                    "⚠️ DATABASE_URLが設定されていません。"
+                    "⚠️ DATABASE_URLが設定されていません。",
+                    flush=True
                 )
 
             # ------------------------------------------------
@@ -853,6 +932,11 @@ def create_bot():
             if os.path.isdir(cogs_path):
 
                 loaded_count = 0
+
+                print(
+                    "📦 Cog読み込みを開始します...",
+                    flush=True
+                )
 
                 for filename in sorted(
                     os.listdir(cogs_path)
@@ -871,6 +955,12 @@ def create_bot():
 
                     try:
 
+                        print(
+                            f"🔧 Cog読み込み中: "
+                            f"{extension}",
+                            flush=True
+                        )
+
                         await self.load_extension(
                             extension
                         )
@@ -879,29 +969,34 @@ def create_bot():
 
                         print(
                             f"✅ Cog読み込み成功: "
-                            f"{extension}"
+                            f"{extension}",
+                            flush=True
                         )
 
                     except Exception as e:
 
                         print(
                             f"❌ Cog読み込み失敗: "
-                            f"{extension}"
+                            f"{extension}",
+                            flush=True
                         )
 
                         print(
-                            f"   エラー: {e}"
+                            f"   エラー: {e}",
+                            flush=True
                         )
 
                 print(
                     f"📦 Cog読み込み完了: "
-                    f"{loaded_count}個"
+                    f"{loaded_count}個",
+                    flush=True
                 )
 
             else:
 
                 print(
-                    "ℹ️ cogsフォルダがありません。"
+                    "ℹ️ cogsフォルダがありません。",
+                    flush=True
                 )
 
             # ------------------------------------------------
@@ -911,24 +1006,28 @@ def create_bot():
             try:
 
                 print(
-                    "🔄 Slash Commandを同期しています..."
+                    "🔄 Slash Commandを同期しています...",
+                    flush=True
                 )
 
                 synced = await self.tree.sync()
 
                 print(
                     f"✅ Slash Command同期完了: "
-                    f"{len(synced)}個"
+                    f"{len(synced)}個",
+                    flush=True
                 )
 
             except Exception as e:
 
                 print(
-                    f"❌ Slash Command同期失敗: {e}"
+                    f"❌ Slash Command同期失敗: {e}",
+                    flush=True
                 )
 
             print(
-                "🔧 Bot setup_hook完了"
+                "🔧 Bot setup_hook完了",
+                flush=True
             )
 
         # ====================================================
@@ -937,7 +1036,10 @@ def create_bot():
 
         async def close(self):
 
-            print("🔴 Discord Botを終了しています...")
+            print(
+                "🔴 Discord Botを終了しています...",
+                flush=True
+            )
 
             if self.db_pool is not None:
 
@@ -946,13 +1048,15 @@ def create_bot():
                     await self.db_pool.close()
 
                     print(
-                        "🗄️ PostgreSQL接続を終了しました。"
+                        "🗄️ PostgreSQL接続を終了しました。",
+                        flush=True
                     )
 
                 except Exception as e:
 
                     print(
-                        f"⚠️ PostgreSQL終了エラー: {e}"
+                        f"⚠️ PostgreSQL終了エラー: {e}",
+                        flush=True
                     )
 
                 self.db_pool = None
@@ -968,7 +1072,8 @@ def create_bot():
             print(
                 f"➕ Guild参加: "
                 f"{guild.name} "
-                f"({guild.id})"
+                f"({guild.id})",
+                flush=True
             )
 
             await self.update_status()
@@ -982,7 +1087,8 @@ def create_bot():
             print(
                 f"➖ Guild退出: "
                 f"{guild.name} "
-                f"({guild.id})"
+                f"({guild.id})",
+                flush=True
             )
 
             await self.update_status()
@@ -1010,13 +1116,15 @@ def create_bot():
 
                 print(
                     f"🟢 Botステータス更新: "
-                    f"{server_count}個のサーバー"
+                    f"{server_count}個のサーバー",
+                    flush=True
                 )
 
             except Exception as e:
 
                 print(
-                    f"⚠️ ステータス更新失敗: {e}"
+                    f"⚠️ ステータス更新失敗: {e}",
+                    flush=True
                 )
 
         # ====================================================
@@ -1025,30 +1133,66 @@ def create_bot():
 
         async def on_ready(self):
 
-            print("")
-            print("=" * 60)
-            print("🟢 Discord Bot Ready")
-            print("=" * 60)
+            print(
+                "",
+                flush=True
+            )
+
+            print(
+                "=" * 60,
+                flush=True
+            )
+
+            print(
+                "🟢 Discord Bot Ready",
+                flush=True
+            )
+
+            print(
+                "=" * 60,
+                flush=True
+            )
 
             if self.user:
 
                 print(
                     f"Bot: "
                     f"{self.user} "
-                    f"({self.user.id})"
+                    f"({self.user.id})",
+                    flush=True
                 )
 
             print(
                 f"Guild数: "
-                f"{len(self.guilds)}"
+                f"{len(self.guilds)}",
+                flush=True
             )
 
-            print("=" * 60)
-            print("")
+            print(
+                "=" * 60,
+                flush=True
+            )
+
+            print(
+                "",
+                flush=True
+            )
 
             await self.update_status()
 
-    return MyBot()
+    print(
+        "🟣 MyBotクラス定義完了",
+        flush=True
+    )
+
+    bot = MyBot()
+
+    print(
+        "🟣 MyBotインスタンス作成完了",
+        flush=True
+    )
+
+    return bot
 
 
 # ============================================================
@@ -1060,21 +1204,40 @@ def run_discord_bot():
     if not DISCORD_TOKEN:
 
         print(
-            "❌ DISCORD_TOKENが設定されていません。"
+            "❌ DISCORD_TOKENが設定されていません。",
+            flush=True
         )
 
         return
 
-    print("")
-    print("=" * 60)
-    print("🔵 Discord Bot起動処理")
-    print("=" * 60)
-    print("")
+    print(
+        "",
+        flush=True
+    )
+
+    print(
+        "=" * 60,
+        flush=True
+    )
+
+    print(
+        "🔵 Discord Bot起動処理",
+        flush=True
+    )
+
+    print(
+        "=" * 60,
+        flush=True
+    )
+
+    print(
+        "",
+        flush=True
+    )
 
     retry_count = 0
 
     # Retry-Afterが取得できなかった場合のみ使用する
-    # フォールバック値
     fallback_wait_times = [
         60,
         120,
@@ -1092,35 +1255,56 @@ def run_discord_bot():
             retry_count += 1
 
             print(
-                f"🔵 Discord Botを起動しています..."
+                "🔵 Discord Botを起動しています...",
+                flush=True
             )
 
             print(
-                f"🔄 接続試行回数: {retry_count}"
+                f"🔄 接続試行回数: {retry_count}",
+                flush=True
             )
 
             # ------------------------------------------------
-            # 重要:
-            # 毎回新しいBotインスタンスを作成する
-            #
-            # これにより429後に
-            # Session is closed
-            # が発生する問題を回避する
+            # Botインスタンス作成
             # ------------------------------------------------
+
+            print(
+                "🟣 Botインスタンス作成開始...",
+                flush=True
+            )
 
             bot = create_bot()
 
-            bot.run(
-                DISCORD_TOKEN,
-                log_handler=None
+            print(
+                "🟣 Botインスタンス作成完了",
+                flush=True
             )
 
             # ------------------------------------------------
-            # bot.run()が正常終了した場合
+            # Discord接続
             # ------------------------------------------------
 
             print(
-                "🟡 Discord Botが終了しました。"
+                "🟣 bot.run()を開始します...",
+                flush=True
+            )
+
+            bot.run(
+                DISCORD_TOKEN
+            )
+
+            print(
+                "🟣 bot.run()が終了しました",
+                flush=True
+            )
+
+            # ------------------------------------------------
+            # bot.run()正常終了
+            # ------------------------------------------------
+
+            print(
+                "🟡 Discord Botが終了しました。",
+                flush=True
             )
 
             break
@@ -1143,7 +1327,6 @@ def run_discord_bot():
 
                 if retry_after is not None:
 
-                    # 小数が返ってきても切り上げる
                     wait_time = max(
                         1,
                         math.ceil(retry_after)
@@ -1151,31 +1334,31 @@ def run_discord_bot():
 
                     print(
                         "⚠️ Discord APIが429 "
-                        "Rate Limitを返しました。"
+                        "Rate Limitを返しました。",
+                        flush=True
                     )
 
                     print(
                         f"📡 Discord指定 "
                         f"Retry-After: "
-                        f"{retry_after}秒"
+                        f"{retry_after}秒",
+                        flush=True
                     )
 
                     print(
                         f"⏳ 待機時間: "
-                        f"{wait_time}秒"
+                        f"{wait_time}秒",
+                        flush=True
                     )
 
                     print(
                         f"⏰ 約 "
                         f"{format_wait_time(wait_time)} "
-                        f"待ってから再接続します。"
+                        f"待ってから再接続します。",
+                        flush=True
                     )
 
                 else:
-
-                    # ------------------------------------------------
-                    # Retry-Afterが取得できなかった場合
-                    # ------------------------------------------------
 
                     index = min(
                         retry_count - 1,
@@ -1186,57 +1369,69 @@ def run_discord_bot():
 
                     print(
                         "⚠️ Discord APIが429 "
-                        "Rate Limitを返しました。"
+                        "Rate Limitを返しました。",
+                        flush=True
                     )
 
                     print(
                         "⚠️ Retry-Afterを取得できなかったため、"
-                        "フォールバック待機時間を使用します。"
+                        "フォールバック待機時間を使用します。",
+                        flush=True
                     )
 
                     print(
                         f"⏳ 待機時間: "
-                        f"{wait_time}秒"
+                        f"{wait_time}秒",
+                        flush=True
                     )
 
                     print(
                         f"⏰ 約 "
                         f"{format_wait_time(wait_time)} "
-                        f"待ってから再接続します。"
+                        f"待ってから再接続します。",
+                        flush=True
                     )
 
                 print(
-                    "🔄 待機開始..."
+                    "🔄 待機開始...",
+                    flush=True
                 )
 
-                # ------------------------------------------------
-                # Discord指定時間待機
-                # ------------------------------------------------
-
-                time.sleep(wait_time)
+                time.sleep(
+                    wait_time
+                )
 
                 print(
-                    "✅ 待機終了。"
+                    "✅ 待機終了。",
+                    flush=True
                 )
 
                 print(
                     "🔄 新しいBotインスタンスで"
-                    "Discordへ再接続します。"
+                    "Discordへ再接続します。",
+                    flush=True
                 )
 
-                print("")
+                print(
+                    "",
+                    flush=True
+                )
 
                 continue
 
             # ------------------------------------------------
-            # 429以外のHTTPException
+            # 429以外
             # ------------------------------------------------
 
             print(
-                "❌ Discord HTTPException:"
+                "❌ Discord HTTPException:",
+                flush=True
             )
 
-            print(e)
+            print(
+                e,
+                flush=True
+            )
 
             break
 
@@ -1247,13 +1442,18 @@ def run_discord_bot():
         except discord.LoginFailure as e:
 
             print(
-                "❌ Discord LoginFailure:"
+                "❌ Discord LoginFailure:",
+                flush=True
             )
 
-            print(e)
+            print(
+                e,
+                flush=True
+            )
 
             print(
-                "⚠️ DISCORD_TOKENが正しいか確認してください。"
+                "⚠️ DISCORD_TOKENが正しいか確認してください。",
+                flush=True
             )
 
             break
@@ -1265,42 +1465,41 @@ def run_discord_bot():
         except Exception as e:
 
             print(
-                "❌ Bot起動エラー:"
+                "❌ Bot起動エラー:",
+                flush=True
             )
 
             print(
                 f"Exception Type: "
-                f"{type(e).__name__}"
+                f"{type(e).__name__}",
+                flush=True
             )
 
             print(
-                f"Exception: {e}"
+                f"Exception: {e}",
+                flush=True
             )
-
-            # ------------------------------------------------
-            # 想定外エラーの場合は少し待って再起動
-            # ------------------------------------------------
 
             print(
-                "⏳ 30秒後にBotを再起動します..."
+                "⏳ 30秒後にBotを再起動します...",
+                flush=True
             )
 
-            time.sleep(30)
+            time.sleep(
+                30
+            )
 
             print(
-                "🔄 Botを再起動します。"
+                "🔄 Botを再起動します。",
+                flush=True
             )
 
-            print("")
+            print(
+                "",
+                flush=True
+            )
 
         finally:
-
-            # ------------------------------------------------
-            # bot.run()内部で終了処理されるため、
-            # ここでは参照を破棄するだけ
-            #
-            # 次回ループでは必ず新しいBotを作る
-            # ------------------------------------------------
 
             bot = None
 
@@ -1313,7 +1512,8 @@ def run_flask():
 
     print(
         f"🌐 Flaskを起動します。"
-        f" Port={PORT}"
+        f" Port={PORT}",
+        flush=True
     )
 
     app.run(
@@ -1330,11 +1530,30 @@ def run_flask():
 
 def main():
 
-    print("")
-    print("=" * 60)
-    print(f"🚀 {PROJECT_NAME} 起動")
-    print("=" * 60)
-    print("")
+    print(
+        "",
+        flush=True
+    )
+
+    print(
+        "=" * 60,
+        flush=True
+    )
+
+    print(
+        f"🚀 {PROJECT_NAME} 起動",
+        flush=True
+    )
+
+    print(
+        "=" * 60,
+        flush=True
+    )
+
+    print(
+        "",
+        flush=True
+    )
 
     # --------------------------------------------------------
     # Flaskは別スレッドで起動
@@ -1348,7 +1567,8 @@ def main():
     flask_thread.start()
 
     print(
-        "🌐 Flaskスレッドを起動しました。"
+        "🌐 Flaskスレッドを起動しました。",
+        flush=True
     )
 
     # --------------------------------------------------------
@@ -1359,7 +1579,8 @@ def main():
 
         print(
             "🔵 このプロセスをDiscord Botの"
-            "Primary Instanceとして使用します。"
+            "Primary Instanceとして使用します。",
+            flush=True
         )
 
         run_discord_bot()
@@ -1368,13 +1589,15 @@ def main():
 
         print(
             "⚠️ Primary Instanceではないため、"
-            "Discord Botは起動しません。"
+            "Discord Botは起動しません。",
+            flush=True
         )
 
-        # Flaskを生かす
         while True:
 
-            time.sleep(3600)
+            time.sleep(
+                3600
+            )
 
 
 # ============================================================
