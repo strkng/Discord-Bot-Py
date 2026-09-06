@@ -5,6 +5,7 @@ import secrets
 import threading
 import time
 import urllib.parse
+import json
 
 import asyncpg
 import discord
@@ -35,10 +36,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # ========================================
 # 禁止サーバー
-#
-# このサーバーにBotがいなくても、
-# OAuth認証したユーザーが参加していれば
-# 認証拒否する。
 # ========================================
 
 BANNED_GUILD_IDS = {
@@ -48,7 +45,7 @@ BANNED_GUILD_IDS = {
 
 
 # ========================================
-# 多重起動防止・排他ロック制御
+# 多重起動防止
 # ========================================
 
 lock_file = open(
@@ -133,15 +130,6 @@ def auth_login():
         )
 
 
-    # ------------------------------------
-    # 元のURLからGuild ID / Role IDを取得
-    #
-    # 既存仕様:
-    #
-    # /auth/login?state=GUILD_ID_ROLE_ID
-    #
-    # ------------------------------------
-
     requested_state = request.args.get(
         "state",
         "",
@@ -196,16 +184,8 @@ def auth_login():
         grant_role_id = parts[1]
 
 
-    # ------------------------------------
-    # OAuth用の安全なstateを生成
-    # ------------------------------------
-
     oauth_state = secrets.token_urlsafe(32)
 
-
-    # ------------------------------------
-    # Flask Sessionへ保存
-    # ------------------------------------
 
     session["oauth_state"] = oauth_state
 
@@ -213,10 +193,6 @@ def auth_login():
 
     session["grant_role_id"] = grant_role_id
 
-
-    # ------------------------------------
-    # Discord OAuth2 URL
-    # ------------------------------------
 
     params = {
 
@@ -264,10 +240,6 @@ def auth_callback():
     )
 
 
-    # ------------------------------------
-    # OAuthエラー
-    # ------------------------------------
-
     if oauth_error:
 
         return (
@@ -292,10 +264,6 @@ def auth_callback():
             400,
         )
 
-
-    # ------------------------------------
-    # state検証
-    # ------------------------------------
 
     saved_state = session.pop(
         "oauth_state",
@@ -323,10 +291,6 @@ def auth_callback():
         )
 
 
-    # ------------------------------------
-    # ロール付与先
-    # ------------------------------------
-
     grant_guild_id = session.pop(
         "grant_guild_id",
         None,
@@ -339,8 +303,7 @@ def auth_callback():
 
 
     # ====================================
-    # Authorization Code
-    # → Access Token
+    # Authorization Code → Access Token
     # ====================================
 
     token_data = {
@@ -476,9 +439,7 @@ def auth_callback():
 
     try:
 
-        user_data = (
-            user_info_response.json()
-        )
+        user_data = user_info_response.json()
 
     except ValueError:
 
@@ -508,10 +469,6 @@ def auth_callback():
 
     # ====================================
     # ユーザー参加Guild取得
-    #
-    # 禁止サーバー判定に使用。
-    #
-    # 禁止サーバーにBotがいなくてもOK。
     # ====================================
 
     try:
@@ -555,9 +512,7 @@ def auth_callback():
 
     try:
 
-        user_guilds = (
-            guilds_response.json()
-        )
+        user_guilds = guilds_response.json()
 
     except ValueError:
 
@@ -607,10 +562,6 @@ def auth_callback():
                 guild_id
             )
 
-
-    # ====================================
-    # 禁止サーバーに参加している場合
-    # ====================================
 
     if banned_hit_guilds:
 
@@ -745,8 +696,7 @@ def auth_callback():
 
 
     # ====================================
-    # 禁止サーバーなし
-    # → ロール付与
+    # ロール付与
     # ====================================
 
     if grant_guild_id and grant_role_id:
@@ -1212,7 +1162,7 @@ def create_bot():
 
 
     # ====================================
-    # Botステータス
+    # Botステータス更新
     # ====================================
 
     async def update_bot_status():
@@ -1239,7 +1189,7 @@ def create_bot():
 
 
     # ====================================
-    # Bot Ready
+    # Ready
     # ====================================
 
     @new_bot.event
@@ -1283,6 +1233,315 @@ def create_bot():
 
 
 # ========================================
+# 429詳細ログ
+# ========================================
+
+def print_429_details(error):
+
+    print(
+        "",
+        flush=True,
+    )
+
+    print(
+        "==================================================",
+        flush=True,
+    )
+
+    print(
+        "🚨 Discord API 429 詳細情報",
+        flush=True,
+    )
+
+    print(
+        "==================================================",
+        flush=True,
+    )
+
+
+    # ------------------------------------
+    # HTTP Status
+    # ------------------------------------
+
+    print(
+        f"HTTP Status: {getattr(error, 'status', 'unknown')}",
+        flush=True,
+    )
+
+
+    # ------------------------------------
+    # エラー文字列
+    # ------------------------------------
+
+    print(
+        f"Exception Type: {type(error).__name__}",
+        flush=True,
+    )
+
+
+    print(
+        f"Exception: {error}",
+        flush=True,
+    )
+
+
+    # ------------------------------------
+    # Discord.py HTTP Response
+    # ------------------------------------
+
+    response = getattr(
+        error,
+        "response",
+        None,
+    )
+
+
+    if response is not None:
+
+        print(
+            "",
+            flush=True,
+        )
+
+        print(
+            "----- Discord Response -----",
+            flush=True,
+        )
+
+
+        print(
+            f"Response Status: "
+            f"{getattr(response, 'status', 'unknown')}",
+            flush=True,
+        )
+
+
+        print(
+            f"Response Method: "
+            f"{getattr(response, 'method', 'unknown')}",
+            flush=True,
+        )
+
+
+        print(
+            f"Response URL: "
+            f"{getattr(response, 'url', 'unknown')}",
+            flush=True,
+        )
+
+
+        print(
+            f"Response Reason: "
+            f"{getattr(response, 'reason', 'unknown')}",
+            flush=True,
+        )
+
+
+        # --------------------------------
+        # Headers
+        # --------------------------------
+
+        response_headers = getattr(
+            response,
+            "headers",
+            None,
+        )
+
+
+        if response_headers:
+
+            print(
+                "",
+                flush=True,
+            )
+
+            print(
+                "----- Response Headers -----",
+                flush=True,
+            )
+
+
+            # セキュリティ上、
+            # Authorization等は表示しない。
+            #
+            # Rate Limit調査に必要な
+            # ヘッダーだけ表示する。
+
+            important_headers = {
+
+                "retry-after",
+
+                "x-ratelimit-global",
+
+                "x-ratelimit-limit",
+
+                "x-ratelimit-remaining",
+
+                "x-ratelimit-reset",
+
+                "x-ratelimit-reset-after",
+
+                "x-ratelimit-bucket",
+
+                "content-type",
+
+                "date",
+
+            }
+
+
+            for key, value in response_headers.items():
+
+                key_lower = key.lower()
+
+
+                if key_lower in important_headers:
+
+                    print(
+                        f"{key}: {value}",
+                        flush=True,
+                    )
+
+
+    # ------------------------------------
+    # HTTPException text
+    # ------------------------------------
+
+    error_text = getattr(
+        error,
+        "text",
+        None,
+    )
+
+
+    if error_text:
+
+        print(
+            "",
+            flush=True,
+        )
+
+        print(
+            "----- Discord Error Text -----",
+            flush=True,
+        )
+
+
+        print(
+            error_text,
+            flush=True,
+        )
+
+
+        # --------------------------------
+        # JSON解析
+        # --------------------------------
+
+        try:
+
+            parsed = json.loads(
+                error_text
+            )
+
+
+            print(
+                "",
+                flush=True,
+            )
+
+            print(
+                "----- Parsed JSON -----",
+                flush=True,
+            )
+
+
+            if "message" in parsed:
+
+                print(
+                    f"message: {parsed['message']}",
+                    flush=True,
+                )
+
+
+            if "retry_after" in parsed:
+
+                print(
+                    f"retry_after: "
+                    f"{parsed['retry_after']}",
+                    flush=True,
+                )
+
+
+            if "global" in parsed:
+
+                print(
+                    f"global: "
+                    f"{parsed['global']}",
+                    flush=True,
+                )
+
+
+            print(
+                "JSON:",
+                flush=True,
+            )
+
+            print(
+                json.dumps(
+                    parsed,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                flush=True,
+            )
+
+
+        except Exception:
+
+            print(
+                "⚠️ エラーテキストをJSONとして"
+                "解析できませんでした。",
+                flush=True,
+            )
+
+
+    # ------------------------------------
+    # retry_after属性
+    # ------------------------------------
+
+    retry_after = getattr(
+        error,
+        "retry_after",
+        None,
+    )
+
+
+    if retry_after is not None:
+
+        print(
+            "",
+            flush=True,
+        )
+
+        print(
+            f"Exception retry_after: "
+            f"{retry_after}",
+            flush=True,
+        )
+
+
+    print(
+        "==================================================",
+        flush=True,
+    )
+
+    print(
+        "",
+        flush=True,
+    )
+
+
+# ========================================
 # Discord Bot起動
 # ========================================
 
@@ -1291,12 +1550,9 @@ def start_discord_bot():
     if not DISCORD_TOKEN:
 
         print(
-
             "❌ DISCORD_TOKENが設定されていません。"
             "Discord Botを起動できません。",
-
             flush=True,
-
         )
 
         return
@@ -1304,14 +1560,6 @@ def start_discord_bot():
 
     # ------------------------------------
     # 429再試行設定
-    #
-    # 60秒
-    # → 120秒
-    # → 240秒
-    # → 480秒
-    # → 900秒
-    #
-    # 最大15分待機
     # ------------------------------------
 
     retry_delays = [
@@ -1341,8 +1589,6 @@ def start_discord_bot():
 
             # --------------------------------
             # 毎回新しいBotインスタンスを作成
-            #
-            # Session is closed対策
             # --------------------------------
 
             bot = create_bot()
@@ -1359,14 +1605,11 @@ def start_discord_bot():
             )
 
 
-            # --------------------------------
-            # 正常終了
-            # --------------------------------
-
             print(
                 "⚠️ Discord Botが終了しました。",
                 flush=True,
             )
+
 
             return
 
@@ -1378,6 +1621,11 @@ def start_discord_bot():
             # --------------------------------
 
             if e.status == 429:
+
+                print_429_details(
+                    e
+                )
+
 
                 if retry_count < len(
                     retry_delays
@@ -1433,7 +1681,7 @@ def start_discord_bot():
 
 
             # --------------------------------
-            # 429以外のHTTPエラー
+            # 429以外
             # --------------------------------
 
             print(
@@ -1441,6 +1689,7 @@ def start_discord_bot():
                 f"HTTP {e.status}: {e}",
                 flush=True,
             )
+
 
             return
 
@@ -1515,9 +1764,6 @@ def start_discord_bot():
 
             # --------------------------------
             # Session is closed等
-            #
-            # 念のため古いBotを破棄して
-            # 新しいインスタンスで再試行
             # --------------------------------
 
             error_text = str(e)
@@ -1573,8 +1819,7 @@ def start_discord_bot():
 
 
 # ========================================
-# メインインスタンスの場合のみ
-# Discord Bot起動
+# メインインスタンスのみBot起動
 # ========================================
 
 if IS_PRIMARY_INSTANCE:
@@ -1589,7 +1834,7 @@ if IS_PRIMARY_INSTANCE:
 
 
 # ========================================
-# Flaskサーバー起動
+# Flask起動
 # ========================================
 
 if __name__ == "__main__":
