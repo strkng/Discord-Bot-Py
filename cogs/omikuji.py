@@ -32,34 +32,55 @@ class Omikuji(commands.Cog):
     )
     async def omikuji(self, interaction: discord.Interaction):
 
+        print(
+            f"[Omikuji] /omikuji 実行 "
+            f"user={interaction.user.id} "
+            f"guild={interaction.guild_id}",
+            flush=True
+        )
+
         # ----------------------------------------
         # Discordへの初回応答
         # ----------------------------------------
         try:
+            print(
+                "[Omikuji] interaction.response.defer() 開始",
+                flush=True
+            )
+
             await interaction.response.defer()
+
+            print(
+                "[Omikuji] interaction.response.defer() 成功",
+                flush=True
+            )
 
         except discord.HTTPException as e:
 
-            # Discord Global Rate Limit
+            print(
+                f"[Omikuji] defer() HTTP error "
+                f"status={e.status} "
+                f"error={e}",
+                flush=True
+            )
+
             if e.status == 429:
                 print(
-                    "[Omikuji] Discord API Global Rate Limit (429) "
-                    "のため処理を中止しました。"
+                    "[Omikuji] Discord API 429 "
+                    "初回応答に失敗しました。",
+                    flush=True
                 )
-                return
 
-            # その他のHTTPエラー
-            print(
-                f"[Omikuji] interaction.response.defer() "
-                f"でHTTPエラー: {e}"
-            )
             return
 
         except Exception as e:
+
             print(
-                f"[Omikuji] interaction.response.defer() "
-                f"で予期しないエラー: {e}"
+                f"[Omikuji] defer() unexpected error: "
+                f"{type(e).__name__}: {e}",
+                flush=True
             )
+
             return
 
         # ----------------------------------------
@@ -73,6 +94,12 @@ class Omikuji(commands.Cog):
 
         user_id = str(interaction.user.id)
 
+        print(
+            f"[Omikuji] User/Guild取得完了 "
+            f"user={user_id} guild={guild_id}",
+            flush=True
+        )
+
         # ----------------------------------------
         # 日本時間
         # ----------------------------------------
@@ -80,23 +107,49 @@ class Omikuji(commands.Cog):
             ZoneInfo("Asia/Tokyo")
         ).strftime("%Y/%m/%d")
 
+        print(
+            f"[Omikuji] 今日の日付: {today_str}",
+            flush=True
+        )
+
         # ----------------------------------------
         # PostgreSQL
         # ----------------------------------------
         pool = self.bot.db_pool
 
-        # DBプールが存在しない場合
         if pool is None:
-            await interaction.followup.send(
-                "❌ データベースに接続できていません。"
+            print(
+                "[Omikuji] ERROR: db_pool が None",
+                flush=True
             )
+
+            try:
+                await interaction.followup.send(
+                    "❌ データベースに接続できていません。"
+                )
+            except Exception as e:
+                print(
+                    f"[Omikuji] DBエラー通知にも失敗: {e}",
+                    flush=True
+                )
+
             return
+
+        print(
+            "[Omikuji] PostgreSQL接続確認OK",
+            flush=True
+        )
 
         try:
 
             # ----------------------------------------
             # 今日すでに引いたか確認
             # ----------------------------------------
+            print(
+                "[Omikuji] DB検索開始",
+                flush=True
+            )
+
             cooldown_res = await pool.fetchrow(
                 """
                 SELECT last_date
@@ -108,10 +161,23 @@ class Omikuji(commands.Cog):
                 guild_id,
             )
 
+            print(
+                f"[Omikuji] DB検索完了 result={cooldown_res}",
+                flush=True
+            )
+
+            # ----------------------------------------
+            # 1日1回制限
+            # ----------------------------------------
             if (
                 cooldown_res
                 and cooldown_res["last_date"] == today_str
             ):
+                print(
+                    "[Omikuji] 本日は既におみくじ済み",
+                    flush=True
+                )
+
                 embed_error = discord.Embed(
                     title="❌ おみくじは1日1回まで",
                     description=(
@@ -128,6 +194,12 @@ class Omikuji(commands.Cog):
                 await interaction.followup.send(
                     embed=embed_error
                 )
+
+                print(
+                    "[Omikuji] 再抽選防止メッセージ送信完了",
+                    flush=True
+                )
+
                 return
 
             # ----------------------------------------
@@ -135,9 +207,19 @@ class Omikuji(commands.Cog):
             # ----------------------------------------
             fortune = random.choice(omikuji_results)
 
+            print(
+                f"[Omikuji] おみくじ結果決定: {fortune}",
+                flush=True
+            )
+
             # ----------------------------------------
             # DB更新
             # ----------------------------------------
+            print(
+                "[Omikuji] DB更新開始",
+                flush=True
+            )
+
             await pool.execute(
                 """
                 INSERT INTO omikuji_cooldowns
@@ -153,18 +235,29 @@ class Omikuji(commands.Cog):
                 today_str,
             )
 
+            print(
+                "[Omikuji] DB更新完了",
+                flush=True
+            )
+
         except Exception as e:
 
             print(
-                f"[Omikuji] PostgreSQL error: {e}"
+                f"[Omikuji] PostgreSQL error: "
+                f"{type(e).__name__}: {e}",
+                flush=True
             )
 
             try:
                 await interaction.followup.send(
                     "❌ おみくじの処理中にエラーが発生しました。"
                 )
-            except discord.HTTPException:
-                pass
+            except Exception as send_error:
+                print(
+                    f"[Omikuji] エラー通知送信失敗: "
+                    f"{type(send_error).__name__}: {send_error}",
+                    flush=True
+                )
 
             return
 
@@ -194,26 +287,41 @@ class Omikuji(commands.Cog):
         # 結果送信
         # ----------------------------------------
         try:
+
+            print(
+                "[Omikuji] 結果送信開始",
+                flush=True
+            )
+
             await interaction.followup.send(
                 embed=embed
             )
 
+            print(
+                "[Omikuji] 結果送信成功 🎉",
+                flush=True
+            )
+
         except discord.HTTPException as e:
+
+            print(
+                f"[Omikuji] followup.send() HTTP error "
+                f"status={e.status}: {e}",
+                flush=True
+            )
 
             if e.status == 429:
                 print(
-                    "[Omikuji] 結果送信時にDiscord API "
-                    "429が発生しました。"
+                    "[Omikuji] 結果送信時にDiscord API 429",
+                    flush=True
                 )
-                return
-
-            print(
-                f"[Omikuji] followup.send() HTTP error: {e}"
-            )
 
         except Exception as e:
+
             print(
-                f"[Omikuji] followup.send() error: {e}"
+                f"[Omikuji] followup.send() error: "
+                f"{type(e).__name__}: {e}",
+                flush=True
             )
 
 
