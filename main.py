@@ -64,6 +64,7 @@ lock_file = None
 IS_PRIMARY_INSTANCE = False
 
 try:
+
     lock_file = open(LOCK_FILE, "w")
 
     fcntl.flock(
@@ -862,7 +863,22 @@ def create_bot():
                 intents=intents
             )
 
+            # =================================================
+            # PostgreSQL Pool
+            # =================================================
+
             self.db_pool = None
+
+            # 旧Cog互換用
+            #
+            # 既存Cog:
+            #     self.bot.pool
+            #
+            # 新しいCog:
+            #     self.bot.db_pool
+            #
+            # の両方を使用できるようにする。
+            self.pool = None
 
             print(
                 "🟣 MyBot.__init__()完了",
@@ -902,8 +918,24 @@ def create_bot():
                         )
                     )
 
+                    # =================================================
+                    # 旧Cog互換
+                    # =================================================
+                    #
+                    # self.bot.pool
+                    # self.bot.db_pool
+                    #
+                    # のどちらでも同じPoolを使用する。
+                    self.pool = self.db_pool
+
                     print(
                         "✅ PostgreSQL接続成功",
+                        flush=True
+                    )
+
+                    print(
+                        "🔗 DB Pool互換設定完了: "
+                        "self.bot.pool / self.bot.db_pool",
                         flush=True
                     )
 
@@ -915,6 +947,7 @@ def create_bot():
                     )
 
                     self.db_pool = None
+                    self.pool = None
 
             else:
 
@@ -922,6 +955,9 @@ def create_bot():
                     "⚠️ DATABASE_URLが設定されていません。",
                     flush=True
                 )
+
+                self.db_pool = None
+                self.pool = None
 
             # ------------------------------------------------
             # Cogs
@@ -1059,7 +1095,12 @@ def create_bot():
                         flush=True
                     )
 
-                self.db_pool = None
+            # =================================================
+            # DB Pool参照をクリア
+            # =================================================
+
+            self.db_pool = None
+            self.pool = None
 
             await super().close()
 
