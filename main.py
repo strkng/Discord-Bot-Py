@@ -1,6 +1,5 @@
 import fcntl
 import logging
-import math
 import os
 import secrets
 import threading
@@ -69,13 +68,21 @@ BANNED_GUILDS = {
 # Discord OAuth URLs
 # =========================================================
 
-DISCORD_OAUTH_AUTHORIZE = "https://discord.com/oauth2/authorize"
-DISCORD_OAUTH_TOKEN = "https://discord.com/api/oauth2/token"
-DISCORD_API = "https://discord.com/api/v10"
+DISCORD_OAUTH_AUTHORIZE = (
+    "https://discord.com/oauth2/authorize"
+)
+
+DISCORD_OAUTH_TOKEN = (
+    "https://discord.com/api/oauth2/token"
+)
+
+DISCORD_API = (
+    "https://discord.com/api/v10"
+)
 
 
 # =========================================================
-# Authentication Result Page
+# Discord Icon
 # =========================================================
 
 DISCORD_ICON_URL = (
@@ -83,6 +90,10 @@ DISCORD_ICON_URL = (
     "refs/heads/main/Discord_icon.png"
 )
 
+
+# =========================================================
+# Authentication Result Page
+# =========================================================
 
 def auth_page(
     title,
@@ -92,32 +103,44 @@ def auth_page(
     status_code=200
 ):
     """
-    認証結果画面を表示するHTML。
-
-    success=True  : 緑系
-    success=False : 赤系
+    OAuth認証結果を表示するHTMLページ。
     """
 
     if success:
+
         accent = "#57F287"
         accent_dark = "#3BA55D"
         icon_shadow = "rgba(87, 242, 135, 0.30)"
+
         status_text = "認証成功"
         status_icon = "✓"
+
     else:
+
         accent = "#ED4245"
         accent_dark = "#A12D2F"
         icon_shadow = "rgba(237, 66, 69, 0.30)"
+
         status_text = "認証エラー"
         status_icon = "!"
-    
-    safe_title = html.escape(str(title))
-    safe_heading = html.escape(str(heading))
-    safe_message = html.escape(str(message))
+
+    safe_title = html.escape(
+        str(title)
+    )
+
+    safe_heading = html.escape(
+        str(heading)
+    )
+
+    safe_message = html.escape(
+        str(message)
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
+
 <head>
+
     <meta charset="UTF-8">
 
     <meta
@@ -128,6 +151,7 @@ def auth_page(
     <title>{safe_title}</title>
 
     <style>
+
         * {{
             box-sizing: border-box;
         }}
@@ -136,14 +160,17 @@ def auth_page(
         body {{
             margin: 0;
             padding: 0;
+
             width: 100%;
             min-height: 100%;
         }}
 
         body {{
+
             min-height: 100vh;
 
             display: flex;
+
             align-items: center;
             justify-content: center;
 
@@ -170,19 +197,23 @@ def auth_page(
         }}
 
         body::before {{
+
             content: "";
 
             position: fixed;
+
             inset: 0;
 
             pointer-events: none;
 
             background:
+
                 radial-gradient(
                     circle at 20% 20%,
                     rgba(88, 101, 242, 0.15),
                     transparent 30%
                 ),
+
                 radial-gradient(
                     circle at 80% 80%,
                     rgba(87, 242, 135, 0.08),
@@ -191,71 +222,113 @@ def auth_page(
         }}
 
         .container {{
+
             position: relative;
+
             z-index: 1;
 
             width: 100%;
+
             max-width: 520px;
 
-            animation: cardIn 0.55s ease-out;
+            animation:
+                cardIn 0.55s ease-out;
         }}
 
         .card {{
+
             position: relative;
 
             padding: 42px 36px 38px;
 
             text-align: center;
 
-            background: rgba(30, 31, 34, 0.92);
+            background:
+                rgba(30, 31, 34, 0.92);
 
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border:
+                1px solid rgba(255, 255, 255, 0.08);
 
             border-radius: 24px;
 
             box-shadow:
-                0 25px 70px rgba(0, 0, 0, 0.45),
-                0 0 0 1px rgba(255, 255, 255, 0.02);
+
+                0 25px 70px
+                rgba(0, 0, 0, 0.45),
+
+                0 0 0 1px
+                rgba(255, 255, 255, 0.02);
 
             backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
+
+            -webkit-backdrop-filter:
+                blur(18px);
         }}
 
+
+        /* =================================================
+           Discord Icon
+           ================================================= */
+
         .icon {{
-            width: 104px;
-            height: 104px;
+
+            width: 120px;
+
+            height: 100px;
 
             margin: 0 auto 24px;
 
-            border-radius: 50%;
-
-            overflow: hidden;
-
-            background: #5865F2;
-
             display: flex;
+
             align-items: center;
+
             justify-content: center;
 
-            box-shadow:
-                0 12px 35px {icon_shadow};
+            background: transparent;
 
-            animation: iconIn 0.65s ease-out;
+            border-radius: 0;
+
+            overflow: visible;
+
+            filter:
+                drop-shadow(
+                    0 12px 25px
+                    {icon_shadow}
+                );
+
+            animation:
+                iconIn 0.65s ease-out;
         }}
 
         .icon img {{
+
+            /*
+             * coverではなくcontainにすることで
+             * Discordロゴ全体を表示します。
+             */
+
             width: 100%;
+
             height: 100%;
 
             display: block;
 
-            object-fit: cover;
+            object-fit: contain;
+
+            object-position: center;
         }}
 
+
+        /* =================================================
+           Status
+           ================================================= */
+
         .status {{
+
             display: inline-flex;
 
             align-items: center;
+
             justify-content: center;
 
             gap: 7px;
@@ -268,33 +341,30 @@ def auth_page(
 
             color: {accent};
 
-            background: rgba(
-                255,
-                255,
-                255,
-                0.045
-            );
+            background:
+                rgba(255, 255, 255, 0.045);
 
-            border: 1px solid rgba(
-                255,
-                255,
-                255,
-                0.08
-            );
+            border:
+                1px solid
+                rgba(255, 255, 255, 0.08);
 
             font-size: 13px;
+
             font-weight: 700;
 
             letter-spacing: 0.02em;
         }}
 
         .status-icon {{
+
             width: 18px;
+
             height: 18px;
 
             display: inline-flex;
 
             align-items: center;
+
             justify-content: center;
 
             border-radius: 50%;
@@ -304,13 +374,21 @@ def auth_page(
             background: {accent_dark};
 
             font-size: 12px;
+
             font-weight: 800;
         }}
 
+
+        /* =================================================
+           Heading
+           ================================================= */
+
         h1 {{
+
             margin: 0 0 16px;
 
             font-size: 28px;
+
             line-height: 1.35;
 
             font-weight: 750;
@@ -320,19 +398,33 @@ def auth_page(
             letter-spacing: -0.02em;
         }}
 
+
+        /* =================================================
+           Message
+           ================================================= */
+
         .message {{
+
             margin: 0;
 
             color: #b5bac1;
 
             font-size: 15px;
+
             line-height: 1.8;
 
             word-break: break-word;
         }}
 
+
+        /* =================================================
+           Divider
+           ================================================= */
+
         .divider {{
+
             width: 100%;
+
             height: 1px;
 
             margin: 30px 0 22px;
@@ -346,81 +438,143 @@ def auth_page(
                 );
         }}
 
+
+        /* =================================================
+           Footer
+           ================================================= */
+
         .footer {{
+
             color: #72767d;
 
             font-size: 12px;
+
             line-height: 1.6;
         }}
 
         .brand {{
+
             color: #949ba4;
+
             font-weight: 600;
         }}
 
+
+        /* =================================================
+           Animations
+           ================================================= */
+
         @keyframes cardIn {{
+
             from {{
+
                 opacity: 0;
-                transform: translateY(18px) scale(0.98);
+
+                transform:
+                    translateY(18px)
+                    scale(0.98);
             }}
 
             to {{
+
                 opacity: 1;
-                transform: translateY(0) scale(1);
+
+                transform:
+                    translateY(0)
+                    scale(1);
             }}
         }}
 
         @keyframes iconIn {{
+
             from {{
+
                 opacity: 0;
-                transform: scale(0.75);
+
+                transform:
+                    scale(0.75);
             }}
 
             70% {{
-                transform: scale(1.05);
+
+                transform:
+                    scale(1.05);
             }}
 
             to {{
+
                 opacity: 1;
-                transform: scale(1);
+
+                transform:
+                    scale(1);
             }}
         }}
 
+
+        /* =================================================
+           Mobile
+           ================================================= */
+
         @media (max-width: 600px) {{
+
             body {{
+
                 padding: 16px;
             }}
 
             .card {{
-                padding: 34px 24px 30px;
+
+                padding:
+                    34px
+                    24px
+                    30px;
+
                 border-radius: 20px;
             }}
 
             .icon {{
-                width: 88px;
-                height: 88px;
+
+                width: 110px;
+
+                height: 92px;
+
                 margin-bottom: 20px;
             }}
 
             h1 {{
+
                 font-size: 24px;
             }}
 
             .message {{
+
                 font-size: 14px;
             }}
         }}
 
+
+        /* =================================================
+           Reduce Motion
+           ================================================= */
+
         @media (prefers-reduced-motion: reduce) {{
+
             *,
             *::before,
             *::after {{
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
+
+                animation-duration:
+                    0.01ms !important;
+
+                animation-iteration-count:
+                    1 !important;
             }}
         }}
+
     </style>
+
 </head>
+
 
 <body>
 
@@ -428,42 +582,72 @@ def auth_page(
 
         <section class="card">
 
+
+            <!-- Discord Icon -->
+
             <div class="icon">
+
                 <img
                     src="{DISCORD_ICON_URL}"
                     alt="Discord Bot"
                 >
+
             </div>
 
+
+            <!-- Status -->
+
             <div class="status">
+
                 <span class="status-icon">
                     {status_icon}
                 </span>
 
                 {status_text}
+
             </div>
+
+
+            <!-- Heading -->
 
             <h1>
                 {safe_heading}
             </h1>
 
+
+            <!-- Message -->
+
             <p class="message">
                 {safe_message}
             </p>
 
+
+            <!-- Divider -->
+
             <div class="divider"></div>
 
+
+            <!-- Footer -->
+
             <div class="footer">
-                <span class="brand">Discord Bot</span>
+
+                <span class="brand">
+                    Discord Bot
+                </span>
+
                 <br>
+
                 このページを閉じてDiscordに戻ってください。
+
             </div>
+
 
         </section>
 
     </main>
 
 </body>
+
 </html>
 """
 
@@ -475,12 +659,19 @@ def auth_page(
 @app.route("/auth/login")
 def auth_login():
 
-    state_parameter = request.args.get("state", "")
+    state_parameter = request.args.get(
+        "state",
+        ""
+    )
 
-    # state は GUILD_ID_ROLE_ID の形式
+    # ---------------------------------------------
+    # GUILD_ID_ROLE_ID
+    # ---------------------------------------------
+
     parts = state_parameter.split("_")
 
     if len(parts) != 2:
+
         return auth_page(
             "認証エラー",
             "認証情報が正しくありません",
@@ -491,8 +682,15 @@ def auth_login():
 
     guild_id, role_id = parts
 
-    # 数字だけ許可
-    if not guild_id.isdigit() or not role_id.isdigit():
+    # ---------------------------------------------
+    # Numeric Check
+    # ---------------------------------------------
+
+    if (
+        not guild_id.isdigit()
+        or not role_id.isdigit()
+    ):
+
         return auth_page(
             "認証エラー",
             "認証情報が正しくありません",
@@ -501,21 +699,42 @@ def auth_login():
             400
         ), 400
 
-    # セッションに保存
+    # ---------------------------------------------
+    # Session
+    # ---------------------------------------------
+
     session["guild_id"] = guild_id
+
     session["role_id"] = role_id
 
-    # OAuth state
+    # ---------------------------------------------
+    # OAuth State
+    # ---------------------------------------------
+
     oauth_state = secrets.token_urlsafe(32)
 
     session["oauth_state"] = oauth_state
 
+    # ---------------------------------------------
+    # OAuth Parameters
+    # ---------------------------------------------
+
     params = {
-        "client_id": CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
-        "response_type": "code",
-        "scope": "identify guilds",
-        "state": oauth_state,
+
+        "client_id":
+            CLIENT_ID,
+
+        "redirect_uri":
+            REDIRECT_URI,
+
+        "response_type":
+            "code",
+
+        "scope":
+            "identify guilds",
+
+        "state":
+            oauth_state,
     }
 
     url = (
@@ -534,14 +753,21 @@ def auth_login():
 @app.route("/auth/callback")
 def auth_callback():
 
-    code = request.args.get("code")
-    received_state = request.args.get("state")
+    code = request.args.get(
+        "code"
+    )
 
-    # -----------------------------------------------------
+    received_state = request.args.get(
+        "state"
+    )
+
+
+    # =====================================================
     # OAuth State Check
-    # -----------------------------------------------------
+    # =====================================================
 
     if not code:
+
         return auth_page(
             "認証エラー",
             "認証コードがありません",
@@ -550,7 +776,9 @@ def auth_callback():
             400
         ), 400
 
+
     if not received_state:
+
         return auth_page(
             "認証エラー",
             "認証状態がありません",
@@ -559,9 +787,17 @@ def auth_callback():
             400
         ), 400
 
-    saved_state = session.get("oauth_state")
 
-    if not saved_state or received_state != saved_state:
+    saved_state = session.get(
+        "oauth_state"
+    )
+
+
+    if (
+        not saved_state
+        or received_state != saved_state
+    ):
+
         return auth_page(
             "認証エラー",
             "認証に失敗しました",
@@ -570,14 +806,22 @@ def auth_callback():
             400
         ), 400
 
-    # -----------------------------------------------------
-    # Get Guild / Role
-    # -----------------------------------------------------
 
-    guild_id = session.get("guild_id")
-    role_id = session.get("role_id")
+    # =====================================================
+    # Guild / Role
+    # =====================================================
+
+    guild_id = session.get(
+        "guild_id"
+    )
+
+    role_id = session.get(
+        "role_id"
+    )
+
 
     if not guild_id or not role_id:
+
         return auth_page(
             "認証エラー",
             "認証情報がありません",
@@ -586,23 +830,38 @@ def auth_callback():
             400
         ), 400
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # OAuth Token
-    # -----------------------------------------------------
+    # =====================================================
 
     token_data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": REDIRECT_URI,
+
+        "client_id":
+            CLIENT_ID,
+
+        "client_secret":
+            CLIENT_SECRET,
+
+        "grant_type":
+            "authorization_code",
+
+        "code":
+            code,
+
+        "redirect_uri":
+            REDIRECT_URI,
     }
+
 
     try:
 
         token_response = requests.post(
+
             DISCORD_OAUTH_TOKEN,
+
             data=token_data,
+
             timeout=15
         )
 
@@ -621,6 +880,7 @@ def auth_callback():
             500
         ), 500
 
+
     if token_response.status_code != 200:
 
         logger.error(
@@ -637,8 +897,13 @@ def auth_callback():
             400
         ), 400
 
+
     try:
-        token_json = token_response.json()
+
+        token_json = (
+            token_response.json()
+        )
+
     except ValueError:
 
         return auth_page(
@@ -649,7 +914,11 @@ def auth_callback():
             500
         ), 500
 
-    access_token = token_json.get("access_token")
+
+    access_token = token_json.get(
+        "access_token"
+    )
+
 
     if not access_token:
 
@@ -661,19 +930,26 @@ def auth_callback():
             500
         ), 500
 
-    # -----------------------------------------------------
-    # Get Discord User
-    # -----------------------------------------------------
+
+    # =====================================================
+    # Discord User
+    # =====================================================
 
     headers = {
-        "Authorization": f"Bearer {access_token}"
+
+        "Authorization":
+            f"Bearer {access_token}"
     }
+
 
     try:
 
         user_response = requests.get(
+
             f"{DISCORD_API}/users/@me",
+
             headers=headers,
+
             timeout=15
         )
 
@@ -692,6 +968,7 @@ def auth_callback():
             500
         ), 500
 
+
     if user_response.status_code != 200:
 
         logger.error(
@@ -708,8 +985,11 @@ def auth_callback():
             400
         ), 400
 
+
     try:
+
         user = user_response.json()
+
     except ValueError:
 
         return auth_page(
@@ -720,7 +1000,11 @@ def auth_callback():
             500
         ), 500
 
-    user_id = user.get("id")
+
+    user_id = user.get(
+        "id"
+    )
+
 
     if not user_id:
 
@@ -732,15 +1016,19 @@ def auth_callback():
             500
         ), 500
 
-    # -----------------------------------------------------
-    # Get User Guilds
-    # -----------------------------------------------------
+
+    # =====================================================
+    # User Guilds
+    # =====================================================
 
     try:
 
         guilds_response = requests.get(
+
             f"{DISCORD_API}/users/@me/guilds",
+
             headers=headers,
+
             timeout=15
         )
 
@@ -759,6 +1047,7 @@ def auth_callback():
             500
         ), 500
 
+
     if guilds_response.status_code != 200:
 
         logger.error(
@@ -775,8 +1064,13 @@ def auth_callback():
             400
         ), 400
 
+
     try:
-        user_guilds = guilds_response.json()
+
+        user_guilds = (
+            guilds_response.json()
+        )
+
     except ValueError:
 
         return auth_page(
@@ -787,17 +1081,24 @@ def auth_callback():
             500
         ), 500
 
+
     user_guild_ids = {
+
         str(guild.get("id"))
+
         for guild in user_guilds
+
         if guild.get("id")
     }
 
-    # -----------------------------------------------------
-    # Banned Guild Check
-    # -----------------------------------------------------
 
-    if BANNED_GUILDS.intersection(user_guild_ids):
+    # =====================================================
+    # Banned Guild Check
+    # =====================================================
+
+    if BANNED_GUILDS.intersection(
+        user_guild_ids
+    ):
 
         logger.warning(
             "Blocked OAuth user=%s because user is in banned guild",
@@ -812,9 +1113,10 @@ def auth_callback():
             403
         ), 403
 
-    # -----------------------------------------------------
-    # Check Target Guild
-    # -----------------------------------------------------
+
+    # =====================================================
+    # Target Guild Check
+    # =====================================================
 
     if str(guild_id) not in user_guild_ids:
 
@@ -826,26 +1128,35 @@ def auth_callback():
             403
         ), 403
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # Give Role
-    # -----------------------------------------------------
+    # =====================================================
 
     bot_headers = {
-        "Authorization": f"Bot {DISCORD_TOKEN}"
+
+        "Authorization":
+            f"Bot {DISCORD_TOKEN}"
     }
 
+
     role_url = (
+
         f"{DISCORD_API}/guilds/"
         f"{guild_id}/members/"
         f"{user_id}/roles/"
         f"{role_id}"
     )
 
+
     try:
 
         role_response = requests.put(
+
             role_url,
+
             headers=bot_headers,
+
             timeout=15
         )
 
@@ -864,9 +1175,10 @@ def auth_callback():
             500
         ), 500
 
-    # -----------------------------------------------------
-    # Role Assignment Success
-    # -----------------------------------------------------
+
+    # =====================================================
+    # Success
+    # =====================================================
 
     if role_response.status_code == 204:
 
@@ -886,9 +1198,10 @@ def auth_callback():
             200
         ), 200
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # Role Assignment Failed
-    # -----------------------------------------------------
+    # =====================================================
 
     logger.error(
         "Role assignment failed: "
@@ -900,6 +1213,7 @@ def auth_callback():
         role_id
     )
 
+
     if role_response.status_code == 403:
 
         message = (
@@ -907,25 +1221,30 @@ def auth_callback():
             "Botの権限とロールの位置を確認してください。"
         )
 
+
     elif role_response.status_code == 404:
 
         message = (
             "指定されたサーバー、ユーザー、またはロールが見つかりません。"
         )
 
+
     elif role_response.status_code == 429:
 
         message = (
-            "Discord APIのレート制限によりロールを付与できませんでした。"
+            "Discord APIのレート制限により"
+            "ロールを付与できませんでした。"
             "しばらくしてからもう一度お試しください。"
         )
+
 
     else:
 
         message = (
-            f"ロールの付与に失敗しました。"
+            "ロールの付与に失敗しました。"
             f"Discord API HTTP {role_response.status_code}"
         )
+
 
     return auth_page(
         "認証エラー",
@@ -947,10 +1266,15 @@ def run_flask():
         PORT
     )
 
+
     app.run(
+
         host="0.0.0.0",
+
         port=PORT,
+
         debug=False,
+
         use_reloader=False
     )
 
@@ -961,33 +1285,44 @@ def run_flask():
 
 class MyBot(commands.Bot):
 
+
     def __init__(self):
 
-        intents = discord.Intents.default()
+        intents = (
+            discord.Intents.default()
+        )
 
         intents.message_content = True
+
         intents.voice_states = True
+
         intents.members = True
 
+
         super().__init__(
+
             command_prefix="!",
+
             intents=intents
         )
 
+
         self.db_pool = None
 
-        # 旧Cog互換用
+        # 旧Cog互換
         self.pool = None
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # Setup Hook
-    # -----------------------------------------------------
+    # =====================================================
 
     async def setup_hook(self):
 
         logger.info(
             "Running setup_hook..."
         )
+
 
         # -------------------------------------------------
         # PostgreSQL
@@ -999,21 +1334,31 @@ class MyBot(commands.Bot):
                 "Connecting to PostgreSQL..."
             )
 
+
             try:
 
-                self.db_pool = await asyncpg.create_pool(
-                    DATABASE_URL,
-                    min_size=1,
-                    max_size=5,
-                    statement_cache_size=0
+                self.db_pool = (
+                    await asyncpg.create_pool(
+
+                        DATABASE_URL,
+
+                        min_size=1,
+
+                        max_size=5,
+
+                        statement_cache_size=0
+                    )
                 )
+
 
                 # 旧Cogとの互換
                 self.pool = self.db_pool
 
+
                 logger.info(
                     "PostgreSQL connection pool created."
                 )
+
 
             except Exception as error:
 
@@ -1023,13 +1368,16 @@ class MyBot(commands.Bot):
                 )
 
                 self.db_pool = None
+
                 self.pool = None
+
 
         else:
 
             logger.warning(
                 "DATABASE_URL is not configured."
             )
+
 
         # -------------------------------------------------
         # Load Cogs
@@ -1039,19 +1387,31 @@ class MyBot(commands.Bot):
 
         cogs_dir = "cogs"
 
-        if os.path.isdir(cogs_dir):
 
-            for filename in sorted(os.listdir(cogs_dir)):
+        if os.path.isdir(
+            cogs_dir
+        ):
 
-                if not filename.endswith(".py"):
+            for filename in sorted(
+                os.listdir(cogs_dir)
+            ):
+
+                if not filename.endswith(
+                    ".py"
+                ):
                     continue
 
-                if filename.startswith("_"):
+
+                if filename.startswith(
+                    "_"
+                ):
                     continue
+
 
                 extension = (
                     f"cogs.{filename[:-3]}"
                 )
+
 
                 try:
 
@@ -1061,10 +1421,12 @@ class MyBot(commands.Bot):
 
                     loaded_cogs += 1
 
+
                     logger.info(
                         "Loaded Cog: %s",
                         extension
                     )
+
 
                 except Exception:
 
@@ -1073,16 +1435,19 @@ class MyBot(commands.Bot):
                         extension
                     )
 
+
         else:
 
             logger.warning(
                 "cogs directory does not exist."
             )
 
+
         logger.info(
             "Cogs loaded: %s",
             loaded_cogs
         )
+
 
         # -------------------------------------------------
         # Sync Slash Commands
@@ -1090,12 +1455,16 @@ class MyBot(commands.Bot):
 
         try:
 
-            synced = await self.tree.sync()
+            synced = (
+                await self.tree.sync()
+            )
+
 
             logger.info(
                 "Synced %s slash commands.",
                 len(synced)
             )
+
 
         except Exception:
 
@@ -1103,9 +1472,10 @@ class MyBot(commands.Bot):
                 "Failed to sync slash commands."
             )
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # Ready
-    # -----------------------------------------------------
+    # =====================================================
 
     async def on_ready(self):
 
@@ -1113,20 +1483,26 @@ class MyBot(commands.Bot):
             "=========================================="
         )
 
+
         logger.info(
             "Bot Ready: %s (%s)",
             self.user,
-            self.user.id if self.user else "unknown"
+            self.user.id
+            if self.user
+            else "unknown"
         )
+
 
         logger.info(
             "Guild count: %s",
             len(self.guilds)
         )
 
+
         logger.info(
             "=========================================="
         )
+
 
         # -------------------------------------------------
         # Status
@@ -1135,15 +1511,21 @@ class MyBot(commands.Bot):
         try:
 
             await self.change_presence(
+
                 status=discord.Status.online,
+
                 activity=discord.Game(
-                    name=f"{len(self.guilds)}個のサーバー"
+
+                    name=
+                        f"{len(self.guilds)}個のサーバー"
                 )
             )
+
 
             logger.info(
                 "Bot status updated."
             )
+
 
         except Exception:
 
@@ -1151,9 +1533,10 @@ class MyBot(commands.Bot):
                 "Failed to update bot status."
             )
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # Close
-    # -----------------------------------------------------
+    # =====================================================
 
     async def close(self):
 
@@ -1161,15 +1544,18 @@ class MyBot(commands.Bot):
             "Closing Discord bot..."
         )
 
+
         if self.db_pool:
 
             try:
 
                 await self.db_pool.close()
 
+
                 logger.info(
                     "PostgreSQL pool closed."
                 )
+
 
             except Exception:
 
@@ -1177,8 +1563,11 @@ class MyBot(commands.Bot):
                     "Failed to close PostgreSQL pool."
                 )
 
+
         self.db_pool = None
+
         self.pool = None
+
 
         await super().close()
 
@@ -1190,8 +1579,9 @@ class MyBot(commands.Bot):
 def get_retry_after(error):
 
     """
-    Discord API 429からRetry-Afterを取得する。
+    Discord API 429からRetry-Afterを取得します。
     """
+
 
     # -----------------------------------------------------
     # Response Header
@@ -1205,6 +1595,7 @@ def get_retry_after(error):
             None
         )
 
+
         if response:
 
             headers = getattr(
@@ -1213,19 +1604,23 @@ def get_retry_after(error):
                 None
             )
 
+
             if headers:
 
                 value = headers.get(
                     "Retry-After"
                 )
 
+
                 if value is not None:
 
                     return float(value)
 
+
     except Exception:
 
         pass
+
 
     # -----------------------------------------------------
     # discord.py retry_after
@@ -1239,16 +1634,25 @@ def get_retry_after(error):
             None
         )
 
+
         if retry_after is not None:
 
-            return float(retry_after)
+            return float(
+                retry_after
+            )
+
 
     except Exception:
 
         pass
 
+
     return None
 
+
+# =========================================================
+# Run Discord Bot
+# =========================================================
 
 def run_discord_bot():
 
@@ -1260,19 +1664,28 @@ def run_discord_bot():
 
         return
 
+
     fallback_delays = [
+
         60,
+
         120,
+
         240,
+
         480,
+
         900
     ]
 
+
     attempt = 0
+
 
     while True:
 
         bot = None
+
 
         try:
 
@@ -1280,56 +1693,78 @@ def run_discord_bot():
                 "Creating Discord Bot instance..."
             )
 
+
             bot = MyBot()
+
 
             logger.info(
                 "Starting Discord bot..."
             )
 
-            bot.run(DISCORD_TOKEN)
+
+            bot.run(
+                DISCORD_TOKEN
+            )
+
 
             logger.warning(
                 "Discord bot stopped normally."
             )
 
+
             break
+
 
         except discord.HTTPException as error:
 
             if error.status == 429:
 
-                retry_after = get_retry_after(
-                    error
+                retry_after = (
+                    get_retry_after(error)
                 )
+
 
                 if retry_after is None:
 
                     index = min(
+
                         attempt,
-                        len(fallback_delays) - 1
+
+                        len(
+                            fallback_delays
+                        ) - 1
                     )
+
 
                     retry_after = (
                         fallback_delays[index]
                     )
 
+
                 logger.warning(
+
                     "Discord API rate limited. "
                     "Retrying after %.1f seconds.",
+
                     retry_after
                 )
 
+
                 attempt += 1
+
 
                 time.sleep(
                     retry_after
                 )
 
+
                 continue
+
 
             logger.exception(
                 "Discord HTTPException occurred."
             )
+
 
         except discord.LoginFailure:
 
@@ -1338,7 +1773,9 @@ def run_discord_bot():
                 "Check DISCORD_TOKEN."
             )
 
+
             break
+
 
         except Exception:
 
@@ -1346,25 +1783,40 @@ def run_discord_bot():
                 "Unexpected Discord bot error."
             )
 
+
         # -------------------------------------------------
         # Generic Retry
         # -------------------------------------------------
 
         index = min(
+
             attempt,
-            len(fallback_delays) - 1
+
+            len(
+                fallback_delays
+            ) - 1
         )
 
-        delay = fallback_delays[index]
+
+        delay = (
+            fallback_delays[index]
+        )
+
 
         attempt += 1
 
+
         logger.info(
+
             "Restarting Discord bot in %s seconds...",
+
             delay
         )
 
-        time.sleep(delay)
+
+        time.sleep(
+            delay
+        )
 
 
 # =========================================================
@@ -1377,16 +1829,23 @@ LOCK_FILE = "bot_instance.lock"
 def acquire_lock():
 
     lock_file = open(
+
         LOCK_FILE,
+
         "w"
     )
+
 
     try:
 
         fcntl.flock(
+
             lock_file.fileno(),
-            fcntl.LOCK_EX | fcntl.LOCK_NB
+
+            fcntl.LOCK_EX
+            | fcntl.LOCK_NB
         )
+
 
     except BlockingIOError:
 
@@ -1394,9 +1853,12 @@ def acquire_lock():
             "Another bot instance is already running."
         )
 
+
         lock_file.close()
 
+
         return None
+
 
     return lock_file
 
@@ -1411,13 +1873,16 @@ if __name__ == "__main__":
         "=========================================="
     )
 
+
     logger.info(
         "Starting Discord Bot + Flask OAuth"
     )
 
+
     logger.info(
         "=========================================="
     )
+
 
     # -----------------------------------------------------
     # Prevent duplicate bot instances
@@ -1425,24 +1890,31 @@ if __name__ == "__main__":
 
     lock = acquire_lock()
 
+
     if lock is None:
 
         raise SystemExit(1)
+
 
     # -----------------------------------------------------
     # Flask
     # -----------------------------------------------------
 
     flask_thread = threading.Thread(
+
         target=run_flask,
+
         daemon=True
     )
 
+
     flask_thread.start()
+
 
     logger.info(
         "Flask thread started."
     )
+
 
     # -----------------------------------------------------
     # Discord
