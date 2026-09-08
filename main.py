@@ -99,6 +99,539 @@ except Exception as e:
 
 
 # ============================================================
+# 認証画面HTML
+# ============================================================
+
+def auth_page(
+    title,
+    heading,
+    description,
+    icon="✅",
+    success=True,
+    status_code=200,
+    username=None
+):
+
+    if success:
+        theme_class = "success"
+        status_text = "AUTHENTICATION SUCCESS"
+    else:
+        theme_class = "error"
+        status_text = "AUTHENTICATION ERROR"
+
+    username_html = ""
+
+    if username:
+        username_html = f"""
+        <div class="user-box">
+            <div class="user-icon">👤</div>
+            <div>
+                <div class="user-label">認証ユーザー</div>
+                <div class="username">
+                    {username}
+                </div>
+            </div>
+        </div>
+        """
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+
+        <meta charset="UTF-8">
+
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+        >
+
+        <meta
+            name="theme-color"
+            content="#5865f2"
+        >
+
+        <title>{title}</title>
+
+        <style>
+
+            * {{
+                box-sizing: border-box;
+            }}
+
+            html,
+            body {{
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                min-height: 100%;
+            }}
+
+            body {{
+                min-height: 100vh;
+
+                display: flex;
+                justify-content: center;
+                align-items: center;
+
+                padding: 24px;
+
+                font-family:
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    "Noto Sans JP",
+                    sans-serif;
+
+                color: #f2f3f5;
+
+                background:
+                    radial-gradient(
+                        circle at 20% 20%,
+                        rgba(88, 101, 242, 0.22),
+                        transparent 35%
+                    ),
+                    radial-gradient(
+                        circle at 80% 80%,
+                        rgba(114, 137, 218, 0.15),
+                        transparent 35%
+                    ),
+                    #0f1117;
+
+                overflow-x: hidden;
+            }}
+
+            /* 背景のぼかし円 */
+
+            body::before {{
+                content: "";
+
+                position: fixed;
+
+                width: 320px;
+                height: 320px;
+
+                border-radius: 50%;
+
+                background: rgba(88, 101, 242, 0.12);
+
+                filter: blur(80px);
+
+                top: -120px;
+                right: -100px;
+
+                pointer-events: none;
+            }}
+
+            body::after {{
+                content: "";
+
+                position: fixed;
+
+                width: 280px;
+                height: 280px;
+
+                border-radius: 50%;
+
+                background: rgba(87, 242, 135, 0.07);
+
+                filter: blur(80px);
+
+                bottom: -100px;
+                left: -100px;
+
+                pointer-events: none;
+            }}
+
+            .container {{
+                width: 100%;
+                max-width: 500px;
+
+                position: relative;
+                z-index: 1;
+
+                animation:
+                    cardAppear
+                    0.55s
+                    cubic-bezier(.2,.8,.2,1)
+                    forwards;
+            }}
+
+            @keyframes cardAppear {{
+                from {{
+                    opacity: 0;
+                    transform:
+                        translateY(25px)
+                        scale(0.97);
+                }}
+
+                to {{
+                    opacity: 1;
+                    transform:
+                        translateY(0)
+                        scale(1);
+                }}
+            }}
+
+            .card {{
+                position: relative;
+
+                padding: 42px 36px 36px;
+
+                border-radius: 24px;
+
+                background:
+                    linear-gradient(
+                        145deg,
+                        rgba(35, 39, 49, 0.96),
+                        rgba(22, 25, 32, 0.96)
+                    );
+
+                border:
+                    1px solid
+                    rgba(255,255,255,0.08);
+
+                box-shadow:
+                    0 30px 80px
+                    rgba(0,0,0,0.45),
+
+                    0 8px 30px
+                    rgba(0,0,0,0.25);
+
+                backdrop-filter: blur(20px);
+
+                text-align: center;
+            }}
+
+            .brand {{
+                display: flex;
+
+                justify-content: center;
+                align-items: center;
+
+                gap: 10px;
+
+                margin-bottom: 28px;
+
+                font-size: 15px;
+
+                color: #b5bac1;
+
+                font-weight: 600;
+            }}
+
+            .brand-icon {{
+                width: 34px;
+                height: 34px;
+
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                border-radius: 10px;
+
+                background: #5865f2;
+
+                font-size: 18px;
+
+                box-shadow:
+                    0 8px 20px
+                    rgba(88,101,242,0.35);
+            }}
+
+            .icon {{
+                width: 92px;
+                height: 92px;
+
+                margin: 0 auto 24px;
+
+                display: flex;
+                justify-content: center;
+                align-items: center;
+
+                border-radius: 50%;
+
+                font-size: 42px;
+
+                animation:
+                    iconPop
+                    0.55s
+                    0.15s
+                    both;
+            }}
+
+            @keyframes iconPop {{
+                from {{
+                    opacity: 0;
+                    transform: scale(0.5);
+                }}
+
+                70% {{
+                    transform: scale(1.08);
+                }}
+
+                to {{
+                    opacity: 1;
+                    transform: scale(1);
+                }}
+            }}
+
+            .success .icon {{
+                background:
+                    rgba(87,242,135,0.12);
+
+                border:
+                    1px solid
+                    rgba(87,242,135,0.25);
+
+                box-shadow:
+                    0 0 45px
+                    rgba(87,242,135,0.12);
+            }}
+
+            .error .icon {{
+                background:
+                    rgba(237,66,69,0.12);
+
+                border:
+                    1px solid
+                    rgba(237,66,69,0.25);
+
+                box-shadow:
+                    0 0 45px
+                    rgba(237,66,69,0.12);
+            }}
+
+            .status {{
+                display: inline-block;
+
+                margin-bottom: 14px;
+
+                padding: 6px 12px;
+
+                border-radius: 999px;
+
+                font-size: 10px;
+
+                letter-spacing: 1.5px;
+
+                font-weight: 700;
+            }}
+
+            .success .status {{
+                color: #57f287;
+
+                background:
+                    rgba(87,242,135,0.09);
+            }}
+
+            .error .status {{
+                color: #ed4245;
+
+                background:
+                    rgba(237,66,69,0.09);
+            }}
+
+            h1 {{
+                margin: 0 0 14px;
+
+                font-size: 28px;
+
+                line-height: 1.3;
+
+                font-weight: 750;
+
+                letter-spacing: -0.5px;
+            }}
+
+            .description {{
+                margin: 0 auto;
+
+                max-width: 390px;
+
+                color: #b5bac1;
+
+                font-size: 14px;
+
+                line-height: 1.8;
+            }}
+
+            .user-box {{
+                margin-top: 28px;
+
+                padding: 14px 16px;
+
+                display: flex;
+
+                align-items: center;
+
+                text-align: left;
+
+                gap: 12px;
+
+                border-radius: 14px;
+
+                background:
+                    rgba(255,255,255,0.04);
+
+                border:
+                    1px solid
+                    rgba(255,255,255,0.06);
+            }}
+
+            .user-icon {{
+                width: 40px;
+                height: 40px;
+
+                display: flex;
+                justify-content: center;
+                align-items: center;
+
+                border-radius: 50%;
+
+                background:
+                    rgba(88,101,242,0.18);
+
+                font-size: 18px;
+            }}
+
+            .user-label {{
+                color: #949ba4;
+
+                font-size: 11px;
+
+                margin-bottom: 3px;
+            }}
+
+            .username {{
+                color: #f2f3f5;
+
+                font-size: 14px;
+
+                font-weight: 650;
+
+                word-break: break-all;
+            }}
+
+            .divider {{
+                height: 1px;
+
+                margin: 28px 0 22px;
+
+                background:
+                    rgba(255,255,255,0.07);
+            }}
+
+            .footer {{
+                color: #72767d;
+
+                font-size: 11px;
+
+                line-height: 1.7;
+            }}
+
+            .footer strong {{
+                color: #949ba4;
+            }}
+
+            .close-hint {{
+                margin-top: 18px;
+
+                font-size: 12px;
+
+                color: #72767d;
+            }}
+
+            @media (max-width: 600px) {{
+
+                body {{
+                    padding: 16px;
+                }}
+
+                .card {{
+                    padding: 34px 22px 28px;
+
+                    border-radius: 20px;
+                }}
+
+                .icon {{
+                    width: 80px;
+                    height: 80px;
+
+                    font-size: 36px;
+                }}
+
+                h1 {{
+                    font-size: 24px;
+                }}
+
+                .description {{
+                    font-size: 13px;
+                }}
+
+            }}
+
+        </style>
+
+    </head>
+
+    <body>
+
+        <main class="container">
+
+            <section class="card {theme_class}">
+
+                <div class="brand">
+
+                    <div class="brand-icon">
+                        🤖
+                    </div>
+
+                    <span>
+                        {PROJECT_NAME}
+                    </span>
+
+                </div>
+
+                <div class="icon">
+                    {icon}
+                </div>
+
+                <div class="status">
+                    {status_text}
+                </div>
+
+                <h1>
+                    {heading}
+                </h1>
+
+                <p class="description">
+                    {description}
+                </p>
+
+                {username_html}
+
+                <div class="divider"></div>
+
+                <div class="footer">
+                    <strong>Discord OAuth2</strong><br>
+                    安全な認証処理が完了しました。
+                </div>
+
+                <div class="close-hint">
+                    このページを閉じても問題ありません。
+                </div>
+
+            </section>
+
+        </main>
+
+    </body>
+    </html>
+    """, status_code
+
+
+# ============================================================
 # Flaskトップページ
 # ============================================================
 
@@ -119,7 +652,14 @@ def auth_login():
 
     if not state_parameter:
 
-        return "Missing state parameter", 400
+        return auth_page(
+            "認証エラー",
+            "認証できません",
+            "認証情報が指定されていません。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     # --------------------------------------------------------
     # GUILD_ID_ROLE_ID
@@ -129,13 +669,27 @@ def auth_login():
 
     if len(parts) != 2:
 
-        return "Invalid state parameter", 400
+        return auth_page(
+            "認証エラー",
+            "認証情報が不正です",
+            "サーバーまたはロールの情報を確認できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     guild_id, role_id = parts
 
     if not guild_id.isdigit() or not role_id.isdigit():
 
-        return "Invalid guild or role ID", 400
+        return auth_page(
+            "認証エラー",
+            "認証情報が不正です",
+            "サーバーIDまたはロールIDが正しくありません。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     # --------------------------------------------------------
     # セッション保存
@@ -190,35 +744,26 @@ def auth_callback():
 
     if not saved_state or received_state != saved_state:
 
-        return """
-        <!DOCTYPE html>
-        <html lang="ja">
-        <head>
-            <meta charset="UTF-8">
-            <title>認証失敗</title>
-        </head>
-        <body>
-            <h1>❌ 認証失敗</h1>
-            <p>OAuth stateが一致しません。</p>
-        </body>
-        </html>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "認証に失敗しました",
+            "OAuth stateが一致しません。\n"
+            "もう一度認証をやり直してください。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     if not code:
 
-        return """
-        <!DOCTYPE html>
-        <html lang="ja">
-        <head>
-            <meta charset="UTF-8">
-            <title>認証失敗</title>
-        </head>
-        <body>
-            <h1>❌ 認証失敗</h1>
-            <p>認証コードがありません。</p>
-        </body>
-        </html>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "認証コードがありません",
+            "Discordから認証コードを受け取れませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     # --------------------------------------------------------
     # 対象Guild / Role
@@ -229,19 +774,14 @@ def auth_callback():
 
     if not guild_id or not role_id:
 
-        return """
-        <!DOCTYPE html>
-        <html lang="ja">
-        <head>
-            <meta charset="UTF-8">
-            <title>認証失敗</title>
-        </head>
-        <body>
-            <h1>❌ 認証失敗</h1>
-            <p>対象サーバー情報がありません。</p>
-        </body>
-        </html>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "サーバー情報がありません",
+            "対象サーバーまたはロールの情報を確認できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     # ========================================================
     # Discord OAuth2 Token取得
@@ -270,10 +810,15 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discordへの接続に失敗しました。</p>
-        """, 500
+        return auth_page(
+            "認証失敗",
+            "Discordへの接続に失敗しました",
+            "Discordとの通信中にエラーが発生しました。\n"
+            "しばらく待ってからもう一度お試しください。",
+            icon="❌",
+            success=False,
+            status_code=500
+        )
 
     if token_response.status_code != 200:
 
@@ -284,10 +829,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discord OAuth2トークンを取得できませんでした。</p>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "OAuth2認証に失敗しました",
+            "Discord OAuth2トークンを取得できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     try:
 
@@ -295,19 +844,27 @@ def auth_callback():
 
     except Exception:
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discordから不正なレスポンスが返されました。</p>
-        """, 500
+        return auth_page(
+            "認証失敗",
+            "不正なレスポンスです",
+            "Discordから不正なレスポンスが返されました。",
+            icon="❌",
+            success=False,
+            status_code=500
+        )
 
     access_token = token_json.get("access_token")
 
     if not access_token:
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>アクセストークンを取得できませんでした。</p>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "アクセストークンを取得できませんでした",
+            "Discordからアクセストークンを取得できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     # ========================================================
     # ユーザー情報取得
@@ -332,10 +889,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discordユーザー情報の取得に失敗しました。</p>
-        """, 500
+        return auth_page(
+            "認証失敗",
+            "ユーザー情報を取得できませんでした",
+            "Discordユーザー情報の取得中にエラーが発生しました。",
+            icon="❌",
+            success=False,
+            status_code=500
+        )
 
     if user_response.status_code != 200:
 
@@ -346,10 +907,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discordユーザー情報を取得できませんでした。</p>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "ユーザー情報を取得できませんでした",
+            "Discordユーザー情報を取得できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     try:
 
@@ -357,19 +922,41 @@ def auth_callback():
 
     except Exception:
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>ユーザー情報を解析できませんでした。</p>
-        """, 500
+        return auth_page(
+            "認証失敗",
+            "ユーザー情報を解析できませんでした",
+            "Discordから受け取ったユーザー情報を解析できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=500
+        )
 
     user_id = user_data.get("id")
 
     if not user_id:
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>ユーザーIDを取得できませんでした。</p>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "ユーザーIDを取得できませんでした",
+            "DiscordユーザーIDを取得できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
+
+    # --------------------------------------------------------
+    # 表示用ユーザー名
+    # --------------------------------------------------------
+
+    username = user_data.get("global_name")
+
+    if not username:
+
+        username = user_data.get("username")
+
+    if not username:
+
+        username = "Discord User"
 
     # ========================================================
     # ユーザーが所属しているGuild一覧
@@ -390,10 +977,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discordサーバー情報の取得に失敗しました。</p>
-        """, 500
+        return auth_page(
+            "認証失敗",
+            "サーバー情報を取得できませんでした",
+            "Discordサーバー情報の取得中にエラーが発生しました。",
+            icon="❌",
+            success=False,
+            status_code=500
+        )
 
     if guild_response.status_code != 200:
 
@@ -404,10 +995,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discordサーバー一覧を取得できませんでした。</p>
-        """, 400
+        return auth_page(
+            "認証失敗",
+            "サーバー一覧を取得できませんでした",
+            "Discordサーバー一覧を取得できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=400
+        )
 
     try:
 
@@ -415,10 +1010,14 @@ def auth_callback():
 
     except Exception:
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>サーバー一覧を解析できませんでした。</p>
-        """, 500
+        return auth_page(
+            "認証失敗",
+            "サーバー一覧を解析できませんでした",
+            "Discordから受け取ったサーバー一覧を解析できませんでした。",
+            icon="❌",
+            success=False,
+            status_code=500
+        )
 
     # ========================================================
     # BANサーバー所属チェック
@@ -445,19 +1044,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <!DOCTYPE html>
-        <html lang="ja">
-        <head>
-            <meta charset="UTF-8">
-            <title>認証拒否</title>
-        </head>
-        <body>
-            <h1>❌ 認証できません</h1>
-            <p>参加しているサーバーの関係で認証が拒否されました。</p>
-        </body>
-        </html>
-        """, 403
+        return auth_page(
+            "認証拒否",
+            "認証できません",
+            "参加しているサーバーの関係で認証が拒否されました。",
+            icon="🚫",
+            success=False,
+            status_code=403
+        )
 
     # ========================================================
     # Bot Token確認
@@ -470,10 +1064,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ エラー</h1>
-        <p>Bot設定が正しくありません。</p>
-        """, 500
+        return auth_page(
+            "システムエラー",
+            "Bot設定に問題があります",
+            "Bot設定が正しくありません。",
+            icon="⚠️",
+            success=False,
+            status_code=500
+        )
 
     # ========================================================
     # Role付与
@@ -503,10 +1101,14 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <h1>❌ 認証失敗</h1>
-        <p>Discordへの接続に失敗しました。</p>
-        """, 500
+        return auth_page(
+            "認証失敗",
+            "ロールを付与できませんでした",
+            "Discordへの接続中にエラーが発生しました。",
+            icon="❌",
+            success=False,
+            status_code=500
+        )
 
     # --------------------------------------------------------
     # 成功
@@ -522,19 +1124,16 @@ def auth_callback():
             flush=True
         )
 
-        return """
-        <!DOCTYPE html>
-        <html lang="ja">
-        <head>
-            <meta charset="UTF-8">
-            <title>認証成功</title>
-        </head>
-        <body>
-            <h1>✅ 認証成功</h1>
-            <p>ロールが付与されました。</p>
-        </body>
-        </html>
-        """
+        return auth_page(
+            "認証成功",
+            "認証が完了しました！",
+            "Discordアカウントの認証に成功し、"
+            "指定されたロールが付与されました。",
+            icon="✓",
+            success=True,
+            status_code=200,
+            username=username
+        )
 
     # --------------------------------------------------------
     # 失敗
@@ -547,20 +1146,14 @@ def auth_callback():
         flush=True
     )
 
-    return f"""
-    <!DOCTYPE html>
-    <html lang="ja">
-    <head>
-        <meta charset="UTF-8">
-        <title>認証失敗</title>
-    </head>
-    <body>
-        <h1>❌ 認証失敗</h1>
-        <p>ロールを付与できませんでした。</p>
-        <p>HTTP Status: {role_response.status_code}</p>
-    </body>
-    </html>
-    """, 400
+    return auth_page(
+        "認証失敗",
+        "ロールを付与できませんでした",
+        "Discord側でロールの付与に失敗しました。",
+        icon="❌",
+        success=False,
+        status_code=400
+    )
 
 
 # ============================================================
@@ -714,20 +1307,6 @@ def print_429_details(error):
 
 def get_retry_after(error):
 
-    """
-    Discordの429レスポンスからRetry-Afterを取得します。
-
-    優先順位:
-
-        1. Discord Response Header
-        2. discord.py の retry_after
-        3. None
-    """
-
-    # --------------------------------------------------------
-    # Discord Response Header
-    # --------------------------------------------------------
-
     response = getattr(
         error,
         "response",
@@ -750,9 +1329,7 @@ def get_retry_after(error):
 
                     try:
 
-                        retry_after = float(
-                            value
-                        )
+                        retry_after = float(value)
 
                         if retry_after >= 0:
 
@@ -764,10 +1341,6 @@ def get_retry_after(error):
                     ):
 
                         pass
-
-    # --------------------------------------------------------
-    # discord.py側
-    # --------------------------------------------------------
 
     retry_after_attr = getattr(
         error,
@@ -863,21 +1436,8 @@ def create_bot():
                 intents=intents
             )
 
-            # =================================================
-            # PostgreSQL Pool
-            # =================================================
-
             self.db_pool = None
 
-            # 旧Cog互換用
-            #
-            # 既存Cog:
-            #     self.bot.pool
-            #
-            # 新しいCog:
-            #     self.bot.db_pool
-            #
-            # の両方を使用できるようにする。
             self.pool = None
 
             print(
@@ -918,14 +1478,6 @@ def create_bot():
                         )
                     )
 
-                    # =================================================
-                    # 旧Cog互換
-                    # =================================================
-                    #
-                    # self.bot.pool
-                    # self.bot.db_pool
-                    #
-                    # のどちらでも同じPoolを使用する。
                     self.pool = self.db_pool
 
                     print(
@@ -1095,10 +1647,6 @@ def create_bot():
                         flush=True
                     )
 
-            # =================================================
-            # DB Pool参照をクリア
-            # =================================================
-
             self.db_pool = None
             self.pool = None
 
@@ -1221,6 +1769,7 @@ def create_bot():
 
             await self.update_status()
 
+
     print(
         "🟣 MyBotクラス定義完了",
         flush=True
@@ -1278,7 +1827,6 @@ def run_discord_bot():
 
     retry_count = 0
 
-    # Retry-Afterが取得できなかった場合のみ使用する
     fallback_wait_times = [
         60,
         120,
@@ -1305,10 +1853,6 @@ def run_discord_bot():
                 flush=True
             )
 
-            # ------------------------------------------------
-            # Botインスタンス作成
-            # ------------------------------------------------
-
             print(
                 "🟣 Botインスタンス作成開始...",
                 flush=True
@@ -1320,10 +1864,6 @@ def run_discord_bot():
                 "🟣 Botインスタンス作成完了",
                 flush=True
             )
-
-            # ------------------------------------------------
-            # Discord接続
-            # ------------------------------------------------
 
             print(
                 "🟣 bot.run()を開始します...",
@@ -1339,10 +1879,6 @@ def run_discord_bot():
                 flush=True
             )
 
-            # ------------------------------------------------
-            # bot.run()正常終了
-            # ------------------------------------------------
-
             print(
                 "🟡 Discord Botが終了しました。",
                 flush=True
@@ -1350,19 +1886,11 @@ def run_discord_bot():
 
             break
 
-        # ====================================================
-        # Discord API 429
-        # ====================================================
-
         except discord.HTTPException as e:
 
             if e.status == 429:
 
                 print_429_details(e)
-
-                # ------------------------------------------------
-                # Discord指定のRetry-After取得
-                # ------------------------------------------------
 
                 retry_after = get_retry_after(e)
 
@@ -1426,13 +1954,6 @@ def run_discord_bot():
                         flush=True
                     )
 
-                    print(
-                        f"⏰ 約 "
-                        f"{format_wait_time(wait_time)} "
-                        f"待ってから再接続します。",
-                        flush=True
-                    )
-
                 print(
                     "🔄 待機開始...",
                     flush=True
@@ -1460,10 +1981,6 @@ def run_discord_bot():
 
                 continue
 
-            # ------------------------------------------------
-            # 429以外
-            # ------------------------------------------------
-
             print(
                 "❌ Discord HTTPException:",
                 flush=True
@@ -1475,10 +1992,6 @@ def run_discord_bot():
             )
 
             break
-
-        # ====================================================
-        # Tokenなどのログインエラー
-        # ====================================================
 
         except discord.LoginFailure as e:
 
@@ -1498,10 +2011,6 @@ def run_discord_bot():
             )
 
             break
-
-        # ====================================================
-        # その他の例外
-        # ====================================================
 
         except Exception as e:
 
