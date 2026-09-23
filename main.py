@@ -82,6 +82,141 @@ DISCORD_API = (
 
 
 # =========================================================
+# Discord REST API Rate Limit Helper
+# =========================================================
+
+DISCORD_REQUEST_MAX_RETRIES = 5
+
+DISCORD_REQUEST_FALLBACK_DELAYS = [
+    5,
+    15,
+    30,
+    60,
+    120,
+]
+
+
+def get_http_retry_after(response):
+    """
+    Discord REST APIの429レスポンスからRetry-Afterを取得します。
+
+    優先順位:
+    1. Retry-After HTTPヘッダー
+    2. JSONの retry_after
+    3. None
+    """
+
+    try:
+        value = response.headers.get("Retry-After")
+
+        if value is not None:
+            return max(float(value), 0.0)
+
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        data = response.json()
+
+        value = data.get("retry_after")
+
+        if value is not None:
+            return max(float(value), 0.0)
+
+    except (TypeError, ValueError, AttributeError):
+        pass
+
+    return None
+
+
+def discord_rest_request(
+    method,
+    url,
+    *,
+    max_retries=DISCORD_REQUEST_MAX_RETRIES,
+    **kwargs
+):
+    """
+    Discord REST APIへのHTTPリクエストを行います。
+
+    429の場合はDiscordのRetry-Afterを尊重して再試行します。
+    Retry-Afterが取得できない場合はフォールバック待機時間を使います。
+
+    ネットワークエラーはrequests.RequestExceptionとして呼び出し元へ返します。
+    """
+
+    last_response = None
+
+    for attempt in range(max_retries + 1):
+
+        try:
+            response = requests.request(
+                method,
+                url,
+                **kwargs
+            )
+
+        except requests.RequestException:
+            raise
+
+        last_response = response
+
+        if response.status_code != 429:
+            return response
+
+        retry_after = get_http_retry_after(
+            response
+        )
+
+        if retry_after is None:
+
+            index = min(
+                attempt,
+                len(DISCORD_REQUEST_FALLBACK_DELAYS) - 1
+            )
+
+            retry_after = DISCORD_REQUEST_FALLBACK_DELAYS[index]
+
+        try:
+            response_json = response.json()
+        except (ValueError, TypeError):
+            response_json = {}
+
+        is_global = bool(
+            response_json.get("global", False)
+        )
+
+        logger.warning(
+            "Discord REST API rate limited: "
+            "method=%s url=%s status=429 global=%s "
+            "retry_after=%.1f attempt=%s/%s",
+            method,
+            url,
+            is_global,
+            retry_after,
+            attempt + 1,
+            max_retries + 1,
+        )
+
+        if attempt >= max_retries:
+
+            logger.error(
+                "Discord REST API 429 retry limit reached: "
+                "method=%s url=%s",
+                method,
+                url,
+            )
+
+            return response
+
+        time.sleep(
+            retry_after
+        )
+
+    return last_response
+
+
+# =========================================================
 # Discord Icon
 # =========================================================
 
@@ -856,7 +991,9 @@ def auth_callback():
 
     try:
 
-        token_response = requests.post(
+        token_response = discord_rest_request(
+
+            "POST",
 
             DISCORD_OAUTH_TOKEN,
 
@@ -944,7 +1081,9 @@ def auth_callback():
 
     try:
 
-        user_response = requests.get(
+        user_response = discord_rest_request(
+
+            "GET",
 
             f"{DISCORD_API}/users/@me",
 
@@ -1023,7 +1162,9 @@ def auth_callback():
 
     try:
 
-        guilds_response = requests.get(
+        guilds_response = discord_rest_request(
+
+            "GET",
 
             f"{DISCORD_API}/users/@me/guilds",
 
@@ -1151,7 +1292,9 @@ def auth_callback():
 
     try:
 
-        role_response = requests.put(
+        role_response = discord_rest_request(
+
+            "PUT",
 
             role_url,
 
