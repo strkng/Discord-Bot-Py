@@ -1885,22 +1885,45 @@ def run_discord_bot():
 
 
                 logger.warning(
-
-                    "Discord API rate limited. "
-                    "Retrying after %.1f seconds.",
-
-                    retry_after
+                    "Discord API global rate limit detected. "
+                    "Bot will remain OFFLINE and retry after %.1f seconds (%.1f minutes).",
+                    retry_after,
+                    retry_after / 60.0,
                 )
 
+                # Discordから指定されたRetry-Afterをそのまま使用します。
+                # 待機中はGatewayへ再接続しないため、BotはDiscord上で
+                # オフラインのままになります。
+                deadline = time.monotonic() + retry_after
+                last_reported = None
+
+                while True:
+                    remaining = max(0.0, deadline - time.monotonic())
+
+                    if remaining <= 0:
+                        break
+
+                    rounded = int(remaining)
+
+                    if (
+                        rounded % 60 == 0
+                        or rounded <= 10
+                    ) and rounded != last_reported:
+                        logger.info(
+                            "Discord API rate limit: "
+                            "Bot remains OFFLINE. %s seconds remaining.",
+                            rounded,
+                        )
+                        last_reported = rounded
+
+                    time.sleep(min(1.0, remaining))
+
+                logger.info(
+                    "Discord API rate-limit wait finished. "
+                    "Starting Discord bot again..."
+                )
 
                 attempt += 1
-
-
-                time.sleep(
-                    retry_after
-                )
-
-
                 continue
 
 
