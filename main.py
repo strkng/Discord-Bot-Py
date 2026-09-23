@@ -186,6 +186,20 @@ def discord_rest_request(
             response_json.get("global", False)
         )
 
+        # Discordのレート制限を特定できるように、429時の
+        # 主要なレスポンスヘッダーを安全に記録します。
+        # アクセストークンやclient_secretなどはログに出しません。
+        rate_limit_headers = {
+            "Retry-After": response.headers.get("Retry-After"),
+            "X-RateLimit-Limit": response.headers.get("X-RateLimit-Limit"),
+            "X-RateLimit-Remaining": response.headers.get("X-RateLimit-Remaining"),
+            "X-RateLimit-Reset": response.headers.get("X-RateLimit-Reset"),
+            "X-RateLimit-Reset-After": response.headers.get("X-RateLimit-Reset-After"),
+            "X-RateLimit-Scope": response.headers.get("X-RateLimit-Scope"),
+            "X-RateLimit-Bucket": response.headers.get("X-RateLimit-Bucket"),
+            "X-RateLimit-Global": response.headers.get("X-RateLimit-Global"),
+        }
+
         logger.warning(
             "Discord REST API rate limited: "
             "method=%s url=%s status=429 global=%s "
@@ -196,6 +210,25 @@ def discord_rest_request(
             retry_after,
             attempt + 1,
             max_retries + 1,
+        )
+
+        logger.warning(
+            "Discord REST API rate-limit headers: %s",
+            rate_limit_headers,
+        )
+
+        # DiscordのJSON本文に含まれる診断情報も記録します。
+        # access_token等の認証情報はこの時点のレスポンスには含まれませんが、
+        # 念のため既知のレート制限項目だけを取り出します。
+        rate_limit_json = {
+            key: response_json.get(key)
+            for key in ("message", "code", "retry_after", "global")
+            if key in response_json
+        }
+
+        logger.warning(
+            "Discord REST API rate-limit body: %s",
+            rate_limit_json,
         )
 
         if attempt >= max_retries:
