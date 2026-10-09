@@ -1,3 +1,4 @@
+
 from datetime import datetime
 import random
 
@@ -56,31 +57,37 @@ class Omikuji(commands.Cog):
             )
 
         except discord.HTTPException as e:
+            response = getattr(e, "response", None)
+            headers = getattr(response, "headers", {}) or {}
 
             print(
                 f"[Omikuji] defer() HTTP error "
                 f"status={e.status} "
-                f"error={e}",
-                flush=True
+                f"code={getattr(e, 'code', None)} "
+                f"text={getattr(e, 'text', None)!r} "
+                f"retry_after={headers.get('Retry-After')} "
+                f"rate_limit_scope={headers.get('X-RateLimit-Scope')} "
+                f"global={headers.get('X-RateLimit-Global')} "
+                f"content_type={headers.get('Content-Type')} "
+                f"cf_ray={headers.get('CF-Ray')}",
+                flush=True,
             )
 
             if e.status == 429:
                 print(
-                    "[Omikuji] Discord API 429 "
-                    "初回応答に失敗しました。",
-                    flush=True
+                    "[Omikuji] 初回応答が429で失敗。"
+                    "このInteractionへの自動リトライは行いません。",
+                    flush=True,
                 )
 
             return
 
         except Exception as e:
-
             print(
                 f"[Omikuji] defer() unexpected error: "
                 f"{type(e).__name__}: {e}",
                 flush=True
             )
-
             return
 
         # ----------------------------------------
@@ -88,7 +95,7 @@ class Omikuji(commands.Cog):
         # ----------------------------------------
         guild_id = (
             str(interaction.guild_id)
-            if interaction.guild
+            if interaction.guild_id is not None
             else None
         )
 
@@ -115,7 +122,7 @@ class Omikuji(commands.Cog):
         # ----------------------------------------
         # PostgreSQL
         # ----------------------------------------
-        pool = self.bot.db_pool
+        pool = getattr(self.bot, "db_pool", None)
 
         if pool is None:
             print(
@@ -129,7 +136,8 @@ class Omikuji(commands.Cog):
                 )
             except Exception as e:
                 print(
-                    f"[Omikuji] DBエラー通知にも失敗: {e}",
+                    f"[Omikuji] DBエラー通知にも失敗: "
+                    f"{type(e).__name__}: {e}",
                     flush=True
                 )
 
@@ -141,7 +149,6 @@ class Omikuji(commands.Cog):
         )
 
         try:
-
             # ----------------------------------------
             # 今日すでに引いたか確認
             # ----------------------------------------
@@ -155,7 +162,7 @@ class Omikuji(commands.Cog):
                 SELECT last_date
                 FROM omikuji_cooldowns
                 WHERE user_id = $1
-                  AND guild_id = $2
+                  AND guild_id IS NOT DISTINCT FROM $2
                 """,
                 user_id,
                 guild_id,
@@ -228,7 +235,7 @@ class Omikuji(commands.Cog):
                     ($1, $2, $3)
                 ON CONFLICT(user_id, guild_id)
                 DO UPDATE SET
-                    last_date = $3
+                    last_date = EXCLUDED.last_date
                 """,
                 user_id,
                 guild_id,
@@ -241,9 +248,8 @@ class Omikuji(commands.Cog):
             )
 
         except Exception as e:
-
             print(
-                f"[Omikuji] PostgreSQL error: "
+                f"[Omikuji] PostgreSQL/処理エラー: "
                 f"{type(e).__name__}: {e}",
                 flush=True
             )
@@ -287,7 +293,6 @@ class Omikuji(commands.Cog):
         # 結果送信
         # ----------------------------------------
         try:
-
             print(
                 "[Omikuji] 結果送信開始",
                 flush=True
@@ -303,21 +308,23 @@ class Omikuji(commands.Cog):
             )
 
         except discord.HTTPException as e:
+            response = getattr(e, "response", None)
+            headers = getattr(response, "headers", {}) or {}
 
             print(
                 f"[Omikuji] followup.send() HTTP error "
-                f"status={e.status}: {e}",
+                f"status={e.status} "
+                f"code={getattr(e, 'code', None)} "
+                f"text={getattr(e, 'text', None)!r} "
+                f"retry_after={headers.get('Retry-After')} "
+                f"rate_limit_scope={headers.get('X-RateLimit-Scope')} "
+                f"global={headers.get('X-RateLimit-Global')} "
+                f"content_type={headers.get('Content-Type')} "
+                f"cf_ray={headers.get('CF-Ray')}",
                 flush=True
             )
 
-            if e.status == 429:
-                print(
-                    "[Omikuji] 結果送信時にDiscord API 429",
-                    flush=True
-                )
-
         except Exception as e:
-
             print(
                 f"[Omikuji] followup.send() error: "
                 f"{type(e).__name__}: {e}",
