@@ -1,7 +1,7 @@
-
 import discord
 from discord import app_commands
 from discord.ext import commands
+from datetime import timezone
 
 
 class WordFilter(commands.Cog):
@@ -22,8 +22,9 @@ class WordFilter(commands.Cog):
             )
 
         async with self.db_pool.acquire() as conn:
-            # 既存テーブルを削除・再作成しない
-            # 新規環境でのみ、この定義で作成される
+            # 既存テーブルを削除・再作成しない。
+            # 既存DBに guild_id がない構成でも動作するよう、
+            # channel_blocked_words は channel_id と word のみを使用する。
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS channel_blocked_words (
                     channel_id BIGINT NOT NULL,
@@ -34,7 +35,6 @@ class WordFilter(commands.Cog):
                 )
             """)
 
-            # サーバーごとのログチャンネル設定
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS word_filter_settings (
                     guild_id BIGINT PRIMARY KEY,
@@ -53,7 +53,6 @@ class WordFilter(commands.Cog):
                 """,
                 channel_id,
             )
-
         return [row["word"] for row in rows]
 
     async def get_log_channel_id(self, guild_id: int):
@@ -66,32 +65,20 @@ class WordFilter(commands.Cog):
                 """,
                 guild_id,
             )
-
         return row["log_channel_id"] if row else None
 
-    async def send_log(
-        self,
-        message: discord.Message,
-        matched_word: str,
-    ):
+    async def send_log(self, message: discord.Message, matched_word: str):
         if message.guild is None:
             return
 
-        log_channel_id = await self.get_log_channel_id(
-            message.guild.id
-        )
-
-        # ログチャンネルが未設定なら削除だけ行う
+        log_channel_id = await self.get_log_channel_id(message.guild.id)
         if not log_channel_id:
             return
 
         log_channel = message.guild.get_channel(log_channel_id)
-
         if log_channel is None:
             try:
-                log_channel = await self.bot.fetch_channel(
-                    log_channel_id
-                )
+                log_channel = await self.bot.fetch_channel(log_channel_id)
             except (
                 discord.NotFound,
                 discord.Forbidden,
@@ -102,58 +89,71 @@ class WordFilter(commands.Cog):
         if not isinstance(log_channel, discord.TextChannel):
             return
 
-        created_at_unix = int(message.created_at.timestamp())
-        content = message.content or "（テキスト本文なし）"
+        timestamp = int(message.created_at.timestamp())
+        content = message.content or "（テキスト本文なし。画像・添付ファイル等のみの可能性があります）"
+        allowed_mentions = discord.AllowedMentions.none()
 
-        header = (
-            "【禁止ワード検出ログ】\n"
-            f"ユーザー: {message.author} "
-            f"(ID: {message.author.id})\n"
-            f"元のチャンネル: {message.channel.mention} "
-            f"(ID: {message.channel.id})\n"
-            f"送信時間: <t:{created_at_unix}:F>\n"
-            f"対象ワード: {matched_word}\n"
-            f"メッセージID: {message.id}\n"
-            "元のメッセージ全文:\n"
-        )
-
-        # Discordの文字数制限を考慮して分割する
-        limit = 1700
-        chunks = [
-            content[i:i + limit]
-            for i in range(0, len(content), limit)
-        ]
-
+        # Embedのフィールド値には1024文字、説明文には4096文字の上限があるため、
+        # 本文は安全な長さに分けて複数のEmbedに記録する。
+        chunks = [content[i:i + 3500] for i in range(0, len(content), 3500)]
         if not chunks:
             chunks = ["（テキスト本文なし）"]
 
-        allowed_mentions = discord.AllowedMentions.none()
-
-        for index, chunk in enumerate(chunks):
-            if index == 0:
-                log_text = header + chunk
-            else:
-                log_text = (
-                    f"【ログ本文の続き {index + 1}/{len(chunks)}】\n"
-                    f"メッセージID: {message.id}\n"
-                    + chunk
+        try:
+            for index, chunk in enumerate(chunks):
+                embed = discord.Embed(
+                    title=(
+                        "🚨 禁止ワードを検知しました"
+                        if index == 0
+                        else f"📄 削除メッセージ本文（続き {index + 1}/{len(chunks)}）"
+                    ),
+                    color=discord.Color.red(),
+                    timestamp=message.created_at,
                 )
 
-            try:
+                if index == 0:
+                    embed.add_field(
+                        name="ユーザー",
+                        value=f"{message.author.mention}\n`{message.author}`\nID: `{message.author.id}`",
+                        inline=True,
+                    )
+                    embed.add_field(
+                        name="チャンネル",
+                        value=f"{message.channel.mention}\nID: `{message.channel.id}`",
+                        inline=True,
+                    )
+                    embed.add_field(
+                        name="検知した禁止ワード",
+                        value=f"`{matched_word[:1000]}`",
+                        inline=False,
+                    )
+                    embed.add_field(
+                        name="送信日時",
+                        value=f"<t:{timestamp}:F>（<t:{timestamp}:R>）",
+                        inline=True,
+                    )
+                    embed.add_field(
+                        name="メッセージID",
+                        value=f"`{message.id}`",
+                        inline=True,
+                    )
+                    embed.description = f"**削除されたメッセージの全文**\n{chunk}"
+                else:
+                    embed.description = chunk
+
+                embed.set_footer(
+                    text=f"サーバー: {message.guild.name} • メッセージ {index + 1}/{len(chunks)}"
+                )
+
                 await log_channel.send(
-                    log_text,
+                    embed=embed,
                     allowed_mentions=allowed_mentions,
                 )
-            except (
-                discord.Forbidden,
-                discord.HTTPException,
-            ):
-                print(
-                    "[WordFilter] ログ送信に失敗しました: "
-                    f"guild={message.guild.id}, "
-                    f"message={message.id}"
-                )
-                return
+        except (discord.Forbidden, discord.HTTPException):
+            print(
+                "[WordFilter] Embedログ送信に失敗しました: "
+                f"guild={message.guild.id}, message={message.id}"
+            )
 
     @app_commands.command(
         name="word-add",
@@ -178,14 +178,12 @@ class WordFilter(commands.Cog):
             return
 
         word = word.strip().casefold()
-
         if not word:
             await interaction.response.send_message(
                 "ワードを入力してください。",
                 ephemeral=True,
             )
             return
-
         if len(word) > 200:
             await interaction.response.send_message(
                 "ワードは200文字以内にしてください。",
@@ -210,15 +208,9 @@ class WordFilter(commands.Cog):
         if result.endswith(" 0"):
             text = "その禁止ワードはすでに登録されています。"
         else:
-            text = (
-                f"{channel.mention} に禁止ワード "
-                f"`{word}` を追加しました。"
-            )
+            text = f"{channel.mention} に禁止ワード `{word}` を追加しました。"
 
-        await interaction.response.send_message(
-            text,
-            ephemeral=True,
-        )
+        await interaction.response.send_message(text, ephemeral=True)
 
     @app_commands.command(
         name="word-remove",
@@ -243,7 +235,6 @@ class WordFilter(commands.Cog):
             return
 
         word = word.strip().casefold()
-
         async with self.db_pool.acquire() as conn:
             result = await conn.execute(
                 """
@@ -258,15 +249,9 @@ class WordFilter(commands.Cog):
         if result.endswith(" 0"):
             text = "その禁止ワードは登録されていません。"
         else:
-            text = (
-                f"{channel.mention} から禁止ワード "
-                f"`{word}` を削除しました。"
-            )
+            text = f"{channel.mention} から禁止ワード `{word}` を削除しました。"
 
-        await interaction.response.send_message(
-            text,
-            ephemeral=True,
-        )
+        await interaction.response.send_message(text, ephemeral=True)
 
     @app_commands.command(
         name="word-list",
@@ -286,11 +271,7 @@ class WordFilter(commands.Cog):
             )
             return
 
-        words = await self.get_words(
-            interaction.guild_id,
-            channel.id,
-        )
-
+        words = await self.get_words(interaction.guild_id, channel.id)
         if not words:
             text = f"{channel.mention} に禁止ワードはありません。"
         else:
@@ -299,10 +280,7 @@ class WordFilter(commands.Cog):
                 + "\n".join(f"・`{word}`" for word in words)
             )
 
-        await interaction.response.send_message(
-            text[:1900],
-            ephemeral=True,
-        )
+        await interaction.response.send_message(text[:1900], ephemeral=True)
 
     @app_commands.command(
         name="word-clear",
@@ -332,10 +310,8 @@ class WordFilter(commands.Cog):
             )
 
         count = int(result.split()[-1])
-
         await interaction.response.send_message(
-            f"{channel.mention} の禁止ワードを "
-            f"{count} 件削除しました。",
+            f"{channel.mention} の禁止ワードを {count} 件削除しました。",
             ephemeral=True,
         )
 
@@ -360,14 +336,14 @@ class WordFilter(commands.Cog):
             return
 
         if channel is not None:
-            permissions = channel.permissions_for(
-                interaction.guild.me
-            )
+            bot_member = interaction.guild.me
+            if bot_member is None:
+                bot_member = interaction.guild.get_member(self.bot.user.id)
 
-            if not permissions.send_messages:
+            permissions = channel.permissions_for(bot_member) if bot_member else None
+            if permissions is None or not permissions.send_messages or not permissions.embed_links:
                 await interaction.response.send_message(
-                    "指定チャンネルにメッセージを送信できません。"
-                    "Botの権限を確認してください。",
+                    "指定チャンネルでEmbedを送信するには、Botに「メッセージを送信」と「埋め込みリンク」の権限が必要です。",
                     ephemeral=True,
                 )
                 return
@@ -379,17 +355,12 @@ class WordFilter(commands.Cog):
                         (guild_id, log_channel_id)
                     VALUES ($1, $2)
                     ON CONFLICT (guild_id)
-                    DO UPDATE SET
-                        log_channel_id = EXCLUDED.log_channel_id
+                    DO UPDATE SET log_channel_id = EXCLUDED.log_channel_id
                     """,
                     interaction.guild_id,
                     channel.id,
                 )
-
-            text = (
-                f"禁止ワードのログ送信先を "
-                f"{channel.mention} に設定しました。"
-            )
+            text = f"禁止ワードのEmbedログ送信先を {channel.mention} に設定しました。"
         else:
             async with self.db_pool.acquire() as conn:
                 await conn.execute(
@@ -402,52 +373,28 @@ class WordFilter(commands.Cog):
                     """,
                     interaction.guild_id,
                 )
+            text = "ログ送信を解除しました。今後はメッセージの削除のみ行います。"
 
-            text = (
-                "ログ送信を解除しました。"
-                "今後はメッセージの削除のみ行います。"
-            )
-
-        await interaction.response.send_message(
-            text,
-            ephemeral=True,
-        )
+        await interaction.response.send_message(text, ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.guild is None:
+        if message.guild is None or message.author.bot:
             return
 
-        if message.author.bot:
-            return
-
-        # ログチャンネルのログ自体を再検査しない
-        log_channel_id = await self.get_log_channel_id(
-            message.guild.id
-        )
-
+        log_channel_id = await self.get_log_channel_id(message.guild.id)
         if log_channel_id == message.channel.id:
             return
 
-        words = await self.get_words(
-            message.guild.id,
-            message.channel.id,
-        )
-
+        words = await self.get_words(message.guild.id, message.channel.id)
         if not words:
             return
 
         content = message.content.casefold()
-
-        matched_word = next(
-            (word for word in words if word in content),
-            None,
-        )
-
+        matched_word = next((word for word in words if word in content), None)
         if matched_word is None:
             return
 
-        # メッセージを削除
         try:
             await message.delete()
         except (
@@ -457,7 +404,6 @@ class WordFilter(commands.Cog):
         ):
             return
 
-        # ログ先が設定されている場合のみ記録
         await self.send_log(message, matched_word)
 
 
