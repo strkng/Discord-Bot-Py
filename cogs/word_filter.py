@@ -22,14 +22,15 @@ class WordFilter(commands.Cog):
             )
 
         async with self.db_pool.acquire() as conn:
-            # チャンネルごとの禁止ワード
+            # 既存テーブルを削除・再作成しない
+            # 新規環境でのみ、この定義で作成される
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS channel_blocked_words (
-                    guild_id BIGINT NOT NULL,
                     channel_id BIGINT NOT NULL,
                     word TEXT NOT NULL,
                     created_by BIGINT,
-                    PRIMARY KEY (guild_id, channel_id, word)
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (channel_id, word)
                 )
             """)
 
@@ -47,10 +48,9 @@ class WordFilter(commands.Cog):
                 """
                 SELECT word
                 FROM channel_blocked_words
-                WHERE guild_id = $1 AND channel_id = $2
+                WHERE channel_id = $1
                 ORDER BY word
                 """,
-                guild_id,
                 channel_id,
             )
 
@@ -92,13 +92,16 @@ class WordFilter(commands.Cog):
                 log_channel = await self.bot.fetch_channel(
                     log_channel_id
                 )
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            except (
+                discord.NotFound,
+                discord.Forbidden,
+                discord.HTTPException,
+            ):
                 return
 
         if not isinstance(log_channel, discord.TextChannel):
             return
 
-        # 元のメッセージを記録
         created_at_unix = int(message.created_at.timestamp())
         content = message.content or "（テキスト本文なし）"
 
@@ -114,8 +117,7 @@ class WordFilter(commands.Cog):
             "元のメッセージ全文:\n"
         )
 
-        # Discordのメッセージ上限を超えないよう分割する
-        # 長文でも全文がログに残るようにする
+        # Discordの文字数制限を考慮して分割する
         limit = 1700
         chunks = [
             content[i:i + limit]
@@ -142,8 +144,10 @@ class WordFilter(commands.Cog):
                     log_text,
                     allowed_mentions=allowed_mentions,
                 )
-            except (discord.Forbidden, discord.HTTPException):
-                # ログ送信に失敗してもBot全体は停止させない
+            except (
+                discord.Forbidden,
+                discord.HTTPException,
+            ):
                 print(
                     "[WordFilter] ログ送信に失敗しました: "
                     f"guild={message.guild.id}, "
@@ -193,12 +197,11 @@ class WordFilter(commands.Cog):
             result = await conn.execute(
                 """
                 INSERT INTO channel_blocked_words
-                    (guild_id, channel_id, word, created_by)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (guild_id, channel_id, word)
+                    (channel_id, word, created_by)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (channel_id, word)
                 DO NOTHING
                 """,
-                interaction.guild_id,
                 channel.id,
                 word,
                 interaction.user.id,
@@ -245,11 +248,9 @@ class WordFilter(commands.Cog):
             result = await conn.execute(
                 """
                 DELETE FROM channel_blocked_words
-                WHERE guild_id = $1
-                  AND channel_id = $2
-                  AND word = $3
+                WHERE channel_id = $1
+                  AND word = $2
                 """,
-                interaction.guild_id,
                 channel.id,
                 word,
             )
@@ -325,9 +326,8 @@ class WordFilter(commands.Cog):
             result = await conn.execute(
                 """
                 DELETE FROM channel_blocked_words
-                WHERE guild_id = $1 AND channel_id = $2
+                WHERE channel_id = $1
                 """,
-                interaction.guild_id,
                 channel.id,
             )
 
@@ -352,7 +352,7 @@ class WordFilter(commands.Cog):
         interaction: discord.Interaction,
         channel: discord.TextChannel = None,
     ):
-        if interaction.guild_id is None:
+        if interaction.guild_id is None or interaction.guild is None:
             await interaction.response.send_message(
                 "サーバー内で使用してください。",
                 ephemeral=True,
@@ -379,7 +379,8 @@ class WordFilter(commands.Cog):
                         (guild_id, log_channel_id)
                     VALUES ($1, $2)
                     ON CONFLICT (guild_id)
-                    DO UPDATE SET log_channel_id = EXCLUDED.log_channel_id
+                    DO UPDATE SET
+                        log_channel_id = EXCLUDED.log_channel_id
                     """,
                     interaction.guild_id,
                     channel.id,
@@ -420,10 +421,11 @@ class WordFilter(commands.Cog):
         if message.author.bot:
             return
 
-        # ログチャンネルのログ自体が削除されるのを防ぐ
+        # ログチャンネルのログ自体を再検査しない
         log_channel_id = await self.get_log_channel_id(
             message.guild.id
         )
+
         if log_channel_id == message.channel.id:
             return
 
@@ -445,13 +447,17 @@ class WordFilter(commands.Cog):
         if matched_word is None:
             return
 
-        # メッセージを削除する
+        # メッセージを削除
         try:
             await message.delete()
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        except (
+            discord.NotFound,
+            discord.Forbidden,
+            discord.HTTPException,
+        ):
             return
 
-        # ログチャンネルが設定されている場合だけ記録する
+        # ログ先が設定されている場合のみ記録
         await self.send_log(message, matched_word)
 
 
