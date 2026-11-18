@@ -3,16 +3,12 @@ from discord import app_commands
 from discord.ext import commands
 
 
-ROLE_EMOJIS = ["1️⃣", "2️⃣", "3️⃣"]
-
-
 class RoleButton(discord.ui.Button):
     def __init__(
         self,
         guild_id: int,
         role_id: int,
         label: str,
-        emoji: str,
     ):
         auth_url = (
             "https://discord-bot-py-4mzn.onrender.com"
@@ -21,7 +17,6 @@ class RoleButton(discord.ui.Button):
 
         super().__init__(
             label=f"{label} を取得",
-            emoji=emoji,
             style=discord.ButtonStyle.link,
             url=auth_url,
         )
@@ -35,19 +30,12 @@ class RolePanelView(discord.ui.View):
     ):
         super().__init__(timeout=None)
 
-        for index, (role_id, role_name) in enumerate(roles):
-            emoji = (
-                ROLE_EMOJIS[index]
-                if index < len(ROLE_EMOJIS)
-                else "🏷️"
-            )
-
+        for role_id, role_name in roles:
             self.add_item(
                 RoleButton(
                     guild_id=guild_id,
                     role_id=role_id,
                     label=role_name,
-                    emoji=emoji,
                 )
             )
 
@@ -60,10 +48,13 @@ class RolePanel(commands.Cog):
     # Cog読み込み時
     # =========================================================
     async def cog_load(self):
-        print("🔧 rolepanel: cog_load開始", flush=True)
+        print("rolepanel: cog_load開始", flush=True)
 
         if not hasattr(self.bot, "db_pool") or self.bot.db_pool is None:
-            print("⚠️ PostgreSQLが利用できません。", flush=True)
+            print(
+                "rolepanel: PostgreSQLが利用できません。",
+                flush=True,
+            )
             return
 
         try:
@@ -80,26 +71,49 @@ class RolePanel(commands.Cog):
                 """
             )
 
-            print("✅ role_panels テーブル確認完了", flush=True)
+            print(
+                "role_panels テーブル確認完了",
+                flush=True,
+            )
 
         except Exception as e:
-            print(f"❌ テーブル作成エラー: {e}", flush=True)
+            print(
+                f"role_panels テーブル作成エラー: {e}",
+                flush=True,
+            )
             return
 
         try:
             await self.restore_panels()
-        except Exception as e:
-            print(f"❌ パネル復元エラー: {e}", flush=True)
 
-        print("🔧 rolepanel: cog_load完了", flush=True)
+        except Exception as e:
+            print(
+                f"ロールパネル復元エラー: {e}",
+                flush=True,
+            )
+
+        print("rolepanel: cog_load完了", flush=True)
 
     # =========================================================
-    # 既存パネル復元
+    # 既存ロールパネルの復元
     # =========================================================
     async def restore_panels(self):
+        if not hasattr(self.bot, "db_pool") or self.bot.db_pool is None:
+            return
+
+        print(
+            "既存ロールパネルを検索しています...",
+            flush=True,
+        )
+
         rows = await self.bot.db_pool.fetch(
             """
-            SELECT id, guild_id, channel_id, message_id, role_ids
+            SELECT
+                id,
+                guild_id,
+                channel_id,
+                message_id,
+                role_ids
             FROM role_panels
             WHERE message_id IS NOT NULL
             ORDER BY id
@@ -109,45 +123,102 @@ class RolePanel(commands.Cog):
         restored = 0
 
         for row in rows:
-            guild = self.bot.get_guild(row["guild_id"])
+            guild_id = row["guild_id"]
+            channel_id = row["channel_id"]
+            message_id = row["message_id"]
+
+            # -------------------------------------------------
+            # Guild取得
+            # -------------------------------------------------
+            guild = self.bot.get_guild(guild_id)
 
             if guild is None:
                 continue
 
-            channel = guild.get_channel(row["channel_id"])
+            # -------------------------------------------------
+            # Channel取得
+            # -------------------------------------------------
+            channel = guild.get_channel(channel_id)
 
             if channel is None:
                 continue
 
+            # -------------------------------------------------
+            # Role取得
+            # -------------------------------------------------
             roles = []
 
             for role_id in row["role_ids"]:
                 role = guild.get_role(role_id)
 
                 if role is not None:
-                    roles.append((role.id, role.name))
+                    roles.append(
+                        (
+                            role.id,
+                            role.name,
+                        )
+                    )
 
             if not roles:
+                print(
+                    f"有効なロールがありません: "
+                    f"panel_id={row['id']}",
+                    flush=True,
+                )
                 continue
 
+            # -------------------------------------------------
+            # Persistent View登録
+            # -------------------------------------------------
             try:
-                view = RolePanelView(guild.id, roles)
+                view = RolePanelView(
+                    guild_id=guild.id,
+                    roles=roles,
+                )
 
                 self.bot.add_view(
                     view,
-                    message_id=row["message_id"],
+                    message_id=message_id,
                 )
 
                 restored += 1
 
             except Exception as e:
                 print(
-                    f"❌ パネル復元失敗: "
-                    f"message_id={row['message_id']}: {e}",
+                    f"パネル復元失敗 "
+                    f"(message_id={message_id}): {e}",
                     flush=True,
                 )
 
-        print(f"🔄 ロールパネル復元: {restored}個", flush=True)
+        print(
+            f"ロールパネル復元: {restored}個",
+            flush=True,
+        )
+
+    # =========================================================
+    # Embed作成
+    # =========================================================
+    def create_panel_embed(
+        self,
+        roles: list[discord.Role],
+    ) -> discord.Embed:
+
+        embed = discord.Embed(
+            title="ロール取得",
+            description=(
+                "取得したいロールを選択してください。"
+            ),
+            color=discord.Color.blurple(),
+        )
+
+        for role in roles:
+            embed.add_field(
+                name=role.name,
+                value="下のボタンから取得できます。",
+                inline=False,
+            )
+
+        return embed
 
     # =========================================================
     # /rolepanel
@@ -169,27 +240,53 @@ class RolePanel(commands.Cog):
         role2: discord.Role | None = None,
         role3: discord.Role | None = None,
     ):
-        if self.bot.db_pool is None:
+        # -----------------------------------------------------
+        # DBチェック
+        # -----------------------------------------------------
+        if not hasattr(self.bot, "db_pool") or self.bot.db_pool is None:
             await interaction.response.send_message(
-                "❌ PostgreSQLに接続されていません。",
+                "PostgreSQLに接続されていません。",
                 ephemeral=True,
             )
             return
 
+        # -----------------------------------------------------
+        # Guildチェック
+        # -----------------------------------------------------
         if interaction.guild is None:
             await interaction.response.send_message(
-                "❌ サーバー内でのみ使用できます。",
+                "このコマンドはサーバー内でのみ使用できます。",
                 ephemeral=True,
             )
             return
 
         guild = interaction.guild
 
-        role_ids = list(dict.fromkeys(
-            role.id
+        # -----------------------------------------------------
+        # Channelチェック
+        # -----------------------------------------------------
+        if interaction.channel_id is None:
+            await interaction.response.send_message(
+                "チャンネルを取得できませんでした。",
+                ephemeral=True,
+            )
+            return
+
+        # -----------------------------------------------------
+        # ロール一覧作成
+        # -----------------------------------------------------
+        selected_roles = [
+            role
             for role in (role1, role2, role3)
             if role is not None
-        ))
+        ]
+
+        # 重複除去
+        role_ids = list(
+            dict.fromkeys(
+                role.id for role in selected_roles
+            )
+        )
 
         selected_roles = [
             guild.get_role(role_id)
@@ -197,53 +294,75 @@ class RolePanel(commands.Cog):
         ]
 
         selected_roles = [
-            role for role in selected_roles
+            role
+            for role in selected_roles
             if role is not None
         ]
 
         if not selected_roles:
             await interaction.response.send_message(
-                "❌ 有効なロールがありません。",
+                "有効なロールが指定されていません。",
                 ephemeral=True,
             )
             return
 
+        # -----------------------------------------------------
+        # Botのロール位置確認
+        # -----------------------------------------------------
         me = guild.me
 
         if me is not None:
             for role in selected_roles:
                 if role >= me.top_role:
                     await interaction.response.send_message(
-                        f"❌ Botより上位または同じ位置のロールです。\n"
-                        f"対象: {role.mention}",
+                        "Botより上位、または同じ位置のロールは"
+                        "設定できません。\n"
+                        f"対象ロール: {role.mention}",
                         ephemeral=True,
                     )
                     return
 
+        # -----------------------------------------------------
+        # View・Embed作成
+        # -----------------------------------------------------
         roles_for_view = [
-            (role.id, role.name)
+            (
+                role.id,
+                role.name,
+            )
             for role in selected_roles
         ]
 
-        view = RolePanelView(guild.id, roles_for_view)
+        view = RolePanelView(
+            guild_id=guild.id,
+            roles=roles_for_view,
+        )
 
-        # Discordへ先に送信してmessage_idを取得
+        embed = self.create_panel_embed(
+            selected_roles,
+        )
+
+        # -----------------------------------------------------
+        # Discordへパネル送信
+        # -----------------------------------------------------
         try:
             await interaction.response.send_message(
-                "🎫 **ロール取得パネル**\n\n"
-                "下のボタンから取得したいロールを選択してください。",
+                embed=embed,
                 view=view,
             )
 
             message = await interaction.original_response()
 
         except Exception as e:
-            print(f"❌ パネル送信エラー: {e}", flush=True)
+            print(
+                f"rolepanel メッセージ送信エラー: {e}",
+                flush=True,
+            )
 
             try:
                 if interaction.response.is_done():
                     await interaction.followup.send(
-                        "❌ パネル送信に失敗しました。",
+                        "ロールパネルの送信に失敗しました。",
                         ephemeral=True,
                     )
             except Exception:
@@ -251,7 +370,10 @@ class RolePanel(commands.Cog):
 
             return
 
-        # message_idを含めてDB登録
+        # -----------------------------------------------------
+        # DB登録
+        # message_idは取得済み
+        # -----------------------------------------------------
         try:
             await self.bot.db_pool.execute(
                 """
@@ -270,7 +392,7 @@ class RolePanel(commands.Cog):
             )
 
             print(
-                f"✅ ロールパネル作成完了: "
+                f"ロールパネル作成完了: "
                 f"guild={guild.id}, "
                 f"channel={interaction.channel_id}, "
                 f"message={message.id}",
@@ -278,20 +400,30 @@ class RolePanel(commands.Cog):
             )
 
         except Exception as e:
-            print(f"❌ DB登録エラー: {e}", flush=True)
+            print(
+                f"rolepanel DB登録エラー: {e}",
+                flush=True,
+            )
 
+            # DB登録失敗時はパネルを削除
             try:
                 await message.delete()
+
             except Exception as delete_error:
-                print(f"❌ パネル削除エラー: {delete_error}", flush=True)
+                print(
+                    f"パネル削除エラー: {delete_error}",
+                    flush=True,
+                )
 
             try:
                 await interaction.followup.send(
-                    "❌ DB登録に失敗したため、パネルを削除しました。",
+                    "DB登録に失敗したため、パネルを削除しました。",
                     ephemeral=True,
                 )
             except Exception:
                 pass
+
+            return
 
     # =========================================================
     # /rolepanel_delete
@@ -305,20 +437,29 @@ class RolePanel(commands.Cog):
         self,
         interaction: discord.Interaction,
     ):
-        if self.bot.db_pool is None:
+        # -----------------------------------------------------
+        # DBチェック
+        # -----------------------------------------------------
+        if not hasattr(self.bot, "db_pool") or self.bot.db_pool is None:
             await interaction.response.send_message(
-                "❌ PostgreSQLに接続されていません。",
+                "PostgreSQLに接続されていません。",
                 ephemeral=True,
             )
             return
 
+        # -----------------------------------------------------
+        # Guildチェック
+        # -----------------------------------------------------
         if interaction.guild is None:
             await interaction.response.send_message(
-                "❌ サーバー内でのみ使用できます。",
+                "このコマンドはサーバー内でのみ使用できます。",
                 ephemeral=True,
             )
             return
 
+        # -----------------------------------------------------
+        # DB削除
+        # -----------------------------------------------------
         try:
             result = await self.bot.db_pool.execute(
                 """
@@ -330,22 +471,25 @@ class RolePanel(commands.Cog):
                 interaction.channel_id,
             )
 
-            deleted_count = int(result.split()[-1])
+            deleted_count = int(
+                result.split()[-1]
+            )
 
             if deleted_count == 0:
                 await interaction.response.send_message(
-                    "ℹ️ このチャンネルに登録されたパネルはありません。",
+                    "このチャンネルには登録された"
+                    "ロールパネルがありません。",
                     ephemeral=True,
                 )
                 return
 
             await interaction.response.send_message(
-                f"✅ {deleted_count}個のパネル登録を削除しました。",
+                f"{deleted_count}個のロールパネル登録を削除しました。",
                 ephemeral=True,
             )
 
             print(
-                f"🗑️ パネル登録削除: "
+                f"ロールパネル削除: "
                 f"guild={interaction.guild.id}, "
                 f"channel={interaction.channel_id}, "
                 f"count={deleted_count}",
@@ -353,13 +497,21 @@ class RolePanel(commands.Cog):
             )
 
         except Exception as e:
-            print(f"❌ 削除エラー: {e}", flush=True)
+            print(
+                f"rolepanel_delete DBエラー: {e}",
+                flush=True,
+            )
 
             await interaction.response.send_message(
-                "❌ パネル削除に失敗しました。",
+                "ロールパネルの削除に失敗しました。",
                 ephemeral=True,
             )
 
 
+# =============================================================
+# Cog setup
+# =============================================================
 async def setup(bot: commands.Bot):
-    await bot.add_cog(RolePanel(bot))
+    await bot.add_cog(
+        RolePanel(bot)
+    )
